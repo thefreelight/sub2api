@@ -17,6 +17,7 @@ package httpclient
 
 import (
 	"fmt"
+	"net"
 	"net/http"
 	"strings"
 	"sync"
@@ -24,6 +25,7 @@ import (
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/proxyurl"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/proxyutil"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/servertiming"
 	"github.com/Wei-Shaw/sub2api/internal/util/urlvalidator"
 )
 
@@ -32,6 +34,8 @@ const (
 	defaultMaxIdleConns        = 100              // 最大空闲连接数
 	defaultMaxIdleConnsPerHost = 10               // 每个主机最大空闲连接数
 	defaultIdleConnTimeout     = 90 * time.Second // 空闲连接超时时间（建议小于上游 LB 超时）
+	defaultDialTimeout         = 5 * time.Second  // TCP 连接超时（含代理握手），代理不通时快速失败
+	defaultTLSHandshakeTimeout = 5 * time.Second  // TLS 握手超时
 	validatedHostTTL           = 30 * time.Second // DNS Rebinding 校验缓存 TTL
 )
 
@@ -89,6 +93,7 @@ func buildClient(opts Options) (*http.Client, error) {
 	if opts.ValidateResolvedIP && !opts.AllowPrivateHosts {
 		rt = newValidatedTransport(transport)
 	}
+	rt = servertiming.WrapRoundTripper(rt)
 	return &http.Client{
 		Transport: rt,
 		Timeout:   opts.Timeout,
@@ -107,6 +112,10 @@ func buildTransport(opts Options) (*http.Transport, error) {
 	}
 
 	transport := &http.Transport{
+		DialContext: (&net.Dialer{
+			Timeout: defaultDialTimeout,
+		}).DialContext,
+		TLSHandshakeTimeout:   defaultTLSHandshakeTimeout,
 		MaxIdleConns:          maxIdleConns,
 		MaxIdleConnsPerHost:   maxIdleConnsPerHost,
 		MaxConnsPerHost:       opts.MaxConnsPerHost, // 0 表示无限制

@@ -22,6 +22,18 @@
           {{ selectedLabel }}
         </slot>
       </span>
+      <span
+        v-if="clearable && hasValue && !disabled"
+        class="select-clear"
+        role="button"
+        tabindex="-1"
+        aria-label="Clear selection"
+        @click.stop="clearSelection"
+        @mousedown.stop
+        @keydown.enter.stop.prevent="clearSelection"
+      >
+        <Icon name="x" size="sm" />
+      </span>
       <span class="select-icon">
         <Icon
           name="chevronDown"
@@ -46,7 +58,7 @@
           @keydown="onDropdownKeyDown"
         >
           <!-- Search input -->
-          <div v-if="searchable" class="select-search">
+          <div v-if="isSearchable" class="select-search">
             <Icon name="search" size="sm" class="text-gray-400" />
             <input
               ref="searchInputRef"
@@ -77,7 +89,13 @@
               ]"
             >
               <slot name="option" :option="option" :selected="isSelected(option)">
-                <span class="select-option-label">{{ getOptionLabel(option) }}</span>
+                <Icon
+                  v-if="option._creatable"
+                  name="search"
+                  size="sm"
+                  class="flex-shrink-0 text-gray-400"
+                />
+                <span class="select-option-label" :class="option._creatable && 'italic text-gray-500 dark:text-dark-300'">{{ getOptionLabel(option) }}</span>
                 <Icon
                   v-if="isSelected(option)"
                   name="check"
@@ -122,11 +140,14 @@ interface Props {
   placeholder?: string
   disabled?: boolean
   error?: boolean
-  searchable?: boolean
+  searchable?: boolean | 'auto'
   searchPlaceholder?: string
   emptyText?: string
   valueKey?: string
   labelKey?: string
+  creatable?: boolean
+  creatablePrefix?: string
+  clearable?: boolean
 }
 
 interface Emits {
@@ -137,7 +158,10 @@ interface Emits {
 const props = withDefaults(defineProps<Props>(), {
   disabled: false,
   error: false,
-  searchable: false,
+  searchable: 'auto',
+  creatable: false,
+  creatablePrefix: '',
+  clearable: false,
   valueKey: 'value',
   labelKey: 'label'
 })
@@ -159,6 +183,11 @@ const triggerRect = ref<DOMRect | null>(null)
 const placeholderText = computed(() => props.placeholder ?? t('common.selectOption'))
 const searchPlaceholderText = computed(() => props.searchPlaceholder ?? t('common.searchPlaceholder'))
 const emptyTextDisplay = computed(() => props.emptyText ?? t('common.noOptionsFound'))
+
+const isSearchable = computed(() => {
+  if (props.searchable === 'auto') return props.options.length > 5
+  return props.searchable
+})
 
 // Computed style for teleported dropdown
 const dropdownStyle = computed(() => {
@@ -217,12 +246,20 @@ const selectedLabel = computed(() => {
   if (selectedOption.value) {
     return getOptionLabel(selectedOption.value)
   }
+  // In creatable mode, show the raw value if no matching option
+  if (props.creatable && props.modelValue) {
+    return String(props.modelValue)
+  }
   return placeholderText.value
 })
 
+const hasValue = computed(
+  () => props.modelValue !== null && props.modelValue !== undefined && props.modelValue !== ''
+)
+
 const filteredOptions = computed(() => {
   let opts = props.options as any[]
-  if (props.searchable && searchQuery.value) {
+  if (isSearchable.value && searchQuery.value) {
     const query = searchQuery.value.toLowerCase()
     opts = opts.filter((opt) => {
       // Match label
@@ -231,6 +268,12 @@ const filteredOptions = computed(() => {
       if (opt.description && String(opt.description).toLowerCase().includes(query)) return true
       return false
     })
+    // In creatable mode, always prepend a fuzzy search option
+    if (props.creatable && searchQuery.value.trim()) {
+      const trimmed = searchQuery.value.trim()
+      const prefix = props.creatablePrefix || t('common.search')
+      opts = [{ [props.valueKey]: trimmed, [props.labelKey]: `${prefix} "${trimmed}"`, _creatable: true }, ...opts]
+    }
   }
   return opts
 })
@@ -308,7 +351,7 @@ watch(isOpen, (open) => {
         : initialIdx
     }
 
-    if (props.searchable) {
+    if (isSearchable.value) {
       nextTick(() => searchInputRef.value?.focus())
     }
     // Add scroll listener to update position
@@ -328,6 +371,12 @@ const selectOption = (option: any) => {
   emit('change', value, option)
   isOpen.value = false
   triggerRef.value?.focus()
+}
+
+const clearSelection = () => {
+  if (props.disabled) return
+  emit('update:modelValue', null)
+  emit('change', null, null)
 }
 
 // Keyboards
@@ -436,6 +485,12 @@ onUnmounted(() => {
 .select-icon {
   @apply flex-shrink-0 text-gray-400 dark:text-dark-400;
 }
+
+.select-clear {
+  @apply flex flex-shrink-0 cursor-pointer items-center justify-center;
+  @apply rounded text-gray-400 transition-colors;
+  @apply hover:text-gray-600 dark:hover:text-gray-200;
+}
 </style>
 
 <style>
@@ -462,7 +517,7 @@ onUnmounted(() => {
 }
 
 .select-dropdown-portal .select-options {
-  @apply max-h-60 overflow-y-auto py-1 outline-none;
+  @apply max-h-80 overflow-y-auto py-1 outline-none;
 }
 
 .select-dropdown-portal .select-option {

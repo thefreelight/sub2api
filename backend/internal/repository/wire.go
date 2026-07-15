@@ -47,13 +47,27 @@ func ProvideSessionLimitCache(rdb *redis.Client, cfg *config.Config) service.Ses
 	return NewSessionLimitCache(rdb, defaultIdleTimeoutMinutes)
 }
 
+// ProvideSchedulerCache 创建调度快照缓存，并注入快照分块参数。
+func ProvideSchedulerCache(rdb *redis.Client, cfg *config.Config) service.SchedulerCache {
+	mgetChunkSize := defaultSchedulerSnapshotMGetChunkSize
+	writeChunkSize := defaultSchedulerSnapshotWriteChunkSize
+	if cfg != nil {
+		if cfg.Gateway.Scheduling.SnapshotMGetChunkSize > 0 {
+			mgetChunkSize = cfg.Gateway.Scheduling.SnapshotMGetChunkSize
+		}
+		if cfg.Gateway.Scheduling.SnapshotWriteChunkSize > 0 {
+			writeChunkSize = cfg.Gateway.Scheduling.SnapshotWriteChunkSize
+		}
+	}
+	return newSchedulerCacheWithChunkSizes(rdb, mgetChunkSize, writeChunkSize)
+}
+
 // ProviderSet is the Wire provider set for all repositories
 var ProviderSet = wire.NewSet(
 	NewUserRepository,
 	NewAPIKeyRepository,
 	NewGroupRepository,
 	NewAccountRepository,
-	NewSoraAccountRepository,         // Sora 账号扩展表仓储
 	NewScheduledTestPlanRepository,   // 定时测试计划仓储
 	NewScheduledTestResultRepository, // 定时测试结果仓储
 	NewProxyRepository,
@@ -63,6 +77,7 @@ var ProviderSet = wire.NewSet(
 	NewAnnouncementReadRepository,
 	NewUsageLogRepository,
 	NewUsageBillingRepository,
+	NewBatchImageRepository,
 	NewIdempotencyRepository,
 	NewUsageCleanupRepository,
 	NewDashboardAggregationRepository,
@@ -73,6 +88,14 @@ var ProviderSet = wire.NewSet(
 	NewUserAttributeValueRepository,
 	NewUserGroupRateRepository,
 	NewErrorPassthroughRepository,
+	NewTLSFingerprintProfileRepository,
+	NewChannelRepository,
+	NewChannelMonitorRepository,
+	NewChannelMonitorRequestTemplateRepository,
+	NewContentModerationRepository,
+	NewAffiliateRepository,
+	NewUserPlatformQuotaRepository,     // T14: user × platform quota
+	NewUserPlatformQuotaServiceAdapter, // T14: adapter → service.UserPlatformQuotaRepository
 
 	// Cache implementations
 	NewGatewayCache,
@@ -80,9 +103,12 @@ var ProviderSet = wire.NewSet(
 	NewAPIKeyCache,
 	NewTempUnschedCache,
 	NewTimeoutCounterCache,
+	NewOpenAI403CounterCache,
+	NewInternal500CounterCache,
 	ProvideConcurrencyCache,
 	ProvideSessionLimitCache,
 	NewRPMCache,
+	NewUserRPMCache,
 	NewUserMsgQueueCache,
 	NewDashboardCache,
 	NewEmailCache,
@@ -90,12 +116,17 @@ var ProviderSet = wire.NewSet(
 	NewRedeemCache,
 	NewUpdateCache,
 	NewGeminiTokenCache,
-	NewSchedulerCache,
+	NewBatchImageQueue,
+	NewBatchImageDownloadLimiter,
+	NewLeaderLockCache,
+	ProvideSchedulerCache,
 	NewSchedulerOutboxRepository,
 	NewProxyLatencyCache,
 	NewTotpCache,
 	NewRefreshTokenCache,
 	NewErrorPassthroughCache,
+	NewTLSFingerprintProfileCache,
+	NewContentModerationHashCache,
 
 	// Encryptors
 	NewAESEncryptor,
@@ -113,6 +144,7 @@ var ProviderSet = wire.NewSet(
 	NewClaudeOAuthClient,
 	NewHTTPUpstream,
 	NewOpenAIOAuthClient,
+	NewGrokOAuthClient,
 	NewGeminiOAuthClient,
 	NewGeminiCliCodeAssistClient,
 	NewGeminiDriveClient,

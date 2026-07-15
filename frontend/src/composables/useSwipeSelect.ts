@@ -1,4 +1,5 @@
 import { ref, onMounted, onUnmounted, type Ref } from 'vue'
+import type { Virtualizer } from '@tanstack/vue-virtual'
 
 /**
  * WeChat-style swipe/drag to select rows in a DataTable,
@@ -25,11 +26,57 @@ export interface SwipeSelectAdapter {
   isSelected: (id: number) => boolean
   select: (id: number) => void
   deselect: (id: number) => void
+  batchUpdate?: (updater: (draft: Set<number>) => void) => void
+}
+
+export interface SwipeSelectVirtualContext {
+  /** Get the virtualizer instance */
+  getVirtualizer: () => Virtualizer<HTMLElement, Element> | null
+  /** Get all sorted data */
+  getSortedData: () => any[]
+  /** Get row ID from data row */
+  getRowId: (row: any, index: number) => number
+}
+
+/**
+ * Locate a row index from a viewport Y coordinate using the real DOM rows
+ * (`tbody tr[data-index]`). Used when the virtualizer window is empty because the
+ * list is small enough to be rendered in full (virtualization disabled). Rows are
+ * vertically ordered, so this binary-searches — mirroring findRowIndexAtY — and
+ * returns each row's `data-index` (its absolute index in the sorted data), or -1
+ * when no rows are rendered. Exported for unit testing.
+ */
+export function findRowIndexByDomPosition(scrollEl: Element, clientY: number): number {
+  const domRows = Array.from(scrollEl.querySelectorAll('tbody tr[data-index]')) as HTMLElement[]
+  const len = domRows.length
+  if (len === 0) return -1
+  const idxOf = (el: HTMLElement) => Number(el.getAttribute('data-index'))
+
+  // Boundary checks
+  if (clientY < domRows[0].getBoundingClientRect().top) return idxOf(domRows[0])
+  if (clientY > domRows[len - 1].getBoundingClientRect().bottom) return idxOf(domRows[len - 1])
+
+  // Binary search — rows are vertically ordered
+  let lo = 0, hi = len - 1
+  while (lo <= hi) {
+    const mid = (lo + hi) >>> 1
+    const rect = domRows[mid].getBoundingClientRect()
+    if (clientY < rect.top) hi = mid - 1
+    else if (clientY > rect.bottom) lo = mid + 1
+    else return idxOf(domRows[mid])
+  }
+  // In a gap between rows — pick the closer one
+  if (hi < 0) return idxOf(domRows[0])
+  if (lo >= len) return idxOf(domRows[len - 1])
+  const rHi = domRows[hi].getBoundingClientRect()
+  const rLo = domRows[lo].getBoundingClientRect()
+  return (clientY - rHi.bottom < rLo.top - clientY) ? idxOf(domRows[hi]) : idxOf(domRows[lo])
 }
 
 export function useSwipeSelect(
   containerRef: Ref<HTMLElement | null>,
-  adapter: SwipeSelectAdapter
+  adapter: SwipeSelectAdapter,
+  virtualContext?: SwipeSelectVirtualContext
 ) {
   const isDragging = ref(false)
 
@@ -95,6 +142,39 @@ export function useSwipeSelect(
     return (clientY - rHi.bottom < rLo.top - clientY) ? hi : lo
   }
 
+  /** Virtual mode: find row index from Y coordinate using virtualizer data */
+  function findRowIndexAtYVirtual(clientY: number): number {
+    const virt = virtualContext!.getVirtualizer()
+    if (!virt) return -1
+    const scrollEl = virt.scrollElement
+    if (!scrollEl) return -1
+
+    const scrollRect = scrollEl.getBoundingClientRect()
+    const thead = scrollEl.querySelector('thead')
+    const theadHeight = thead ? thead.getBoundingClientRect().height : 0
+    const contentY = clientY - scrollRect.top - theadHeight + scrollEl.scrollTop
+
+    // Search in rendered virtualItems first
+    const items = virt.getVirtualItems()
+    for (const item of items) {
+      if (contentY >= item.start && contentY < item.end) return item.index
+    }
+
+    // Virtualization disabled (small list rendered in full): the window is empty, so
+    // locate the row via real DOM rows instead of the (now-misleading) height estimate.
+    if (items.length === 0) {
+      const domIdx = findRowIndexByDomPosition(scrollEl, clientY)
+      if (domIdx >= 0) return domIdx
+    }
+
+    // Outside visible range: estimate
+    const totalCount = virtualContext!.getSortedData().length
+    if (totalCount === 0) return -1
+    const est = virt.options.estimateSize(0)
+    const guess = Math.floor(contentY / est)
+    return Math.max(0, Math.min(totalCount - 1, guess))
+  }
+
   // --- Prevent text selection via selectstart (no body style mutation) ---
   function onSelectStart(e: Event) { e.preventDefault() }
 
@@ -140,16 +220,68 @@ export function useSwipeSelect(
     const lo = Math.min(rangeMin, prevMin)
     const hi = Math.max(rangeMax, prevMax)
 
-    for (let i = lo; i <= hi && i < cachedRows.length; i++) {
-      const id = getRowId(cachedRows[i])
-      if (id === null) continue
-      if (i >= rangeMin && i <= rangeMax) {
-        if (dragMode === 'select') adapter.select(id)
-        else adapter.deselect(id)
-      } else {
-        const wasSelected = initialSelectedSnapshot.get(id) ?? false
-        if (wasSelected) adapter.select(id)
-        else adapter.deselect(id)
+    if (adapter.batchUpdate) {
+      adapter.batchUpdate((draft) => {
+        for (let i = lo; i <= hi && i < cachedRows.length; i++) {
+          const id = getRowId(cachedRows[i])
+          if (id === null) continue
+          const shouldBeSelected = (i >= rangeMin && i <= rangeMax)
+            ? (dragMode === 'select')
+            : (initialSelectedSnapshot.get(id) ?? false)
+          if (shouldBeSelected) draft.add(id)
+          else draft.delete(id)
+        }
+      })
+    } else {
+      for (let i = lo; i <= hi && i < cachedRows.length; i++) {
+        const id = getRowId(cachedRows[i])
+        if (id === null) continue
+        if (i >= rangeMin && i <= rangeMax) {
+          if (dragMode === 'select') adapter.select(id)
+          else adapter.deselect(id)
+        } else {
+          const wasSelected = initialSelectedSnapshot.get(id) ?? false
+          if (wasSelected) adapter.select(id)
+          else adapter.deselect(id)
+        }
+      }
+    }
+    lastEndIndex = endIndex
+  }
+
+  /** Virtual mode: apply selection range using data array instead of DOM */
+  function applyRangeVirtual(endIndex: number) {
+    if (startRowIndex < 0 || endIndex < 0) return
+    const rangeMin = Math.min(startRowIndex, endIndex)
+    const rangeMax = Math.max(startRowIndex, endIndex)
+    const prevMin = lastEndIndex >= 0 ? Math.min(startRowIndex, lastEndIndex) : rangeMin
+    const prevMax = lastEndIndex >= 0 ? Math.max(startRowIndex, lastEndIndex) : rangeMax
+    const lo = Math.min(rangeMin, prevMin)
+    const hi = Math.max(rangeMax, prevMax)
+    const data = virtualContext!.getSortedData()
+
+    if (adapter.batchUpdate) {
+      adapter.batchUpdate((draft) => {
+        for (let i = lo; i <= hi && i < data.length; i++) {
+          const id = virtualContext!.getRowId(data[i], i)
+          const shouldBeSelected = (i >= rangeMin && i <= rangeMax)
+            ? (dragMode === 'select')
+            : (initialSelectedSnapshot.get(id) ?? false)
+          if (shouldBeSelected) draft.add(id)
+          else draft.delete(id)
+        }
+      })
+    } else {
+      for (let i = lo; i <= hi && i < data.length; i++) {
+        const id = virtualContext!.getRowId(data[i], i)
+        if (i >= rangeMin && i <= rangeMax) {
+          if (dragMode === 'select') adapter.select(id)
+          else adapter.deselect(id)
+        } else {
+          const wasSelected = initialSelectedSnapshot.get(id) ?? false
+          if (wasSelected) adapter.select(id)
+          else adapter.deselect(id)
+        }
       }
     }
     lastEndIndex = endIndex
@@ -234,8 +366,14 @@ export function useSwipeSelect(
     if (shouldPreferNativeTextSelection(target)) return
     if (shouldPreferNativeSelectionOutsideRows(target)) return
 
-    cachedRows = getDataRows()
-    if (cachedRows.length === 0) return
+    if (virtualContext) {
+      // Virtual mode: check data availability instead of DOM rows
+      const data = virtualContext.getSortedData()
+      if (data.length === 0) return
+    } else {
+      cachedRows = getDataRows()
+      if (cachedRows.length === 0) return
+    }
 
     pendingStartY = e.clientY
     // Prevent text selection as soon as the mouse is down,
@@ -253,13 +391,19 @@ export function useSwipeSelect(
     document.removeEventListener('mousemove', onThresholdMove)
     document.removeEventListener('mouseup', onThresholdUp)
 
-    beginDrag(pendingStartY)
+    if (virtualContext) {
+      beginDragVirtual(pendingStartY)
+    } else {
+      beginDrag(pendingStartY)
+    }
 
     // Process the move that crossed the threshold
     lastMouseY = e.clientY
     updateMarquee(e.clientY)
-    const rowIdx = findRowIndexAtY(e.clientY)
-    if (rowIdx >= 0) applyRange(rowIdx)
+    const findIdx = virtualContext ? findRowIndexAtYVirtual : findRowIndexAtY
+    const apply = virtualContext ? applyRangeVirtual : applyRange
+    const rowIdx = findIdx(e.clientY)
+    if (rowIdx >= 0) apply(rowIdx)
     autoScroll(e)
 
     document.addEventListener('mousemove', onMouseMove)
@@ -306,22 +450,62 @@ export function useSwipeSelect(
     window.getSelection()?.removeAllRanges()
   }
 
+  /** Virtual mode: begin drag using data array */
+  function beginDragVirtual(clientY: number) {
+    startRowIndex = findRowIndexAtYVirtual(clientY)
+    const data = virtualContext!.getSortedData()
+    const startRowId = startRowIndex >= 0 && startRowIndex < data.length
+      ? virtualContext!.getRowId(data[startRowIndex], startRowIndex)
+      : null
+    dragMode = (startRowId !== null && adapter.isSelected(startRowId)) ? 'deselect' : 'select'
+
+    // Build full snapshot from all data rows
+    initialSelectedSnapshot = new Map()
+    for (let i = 0; i < data.length; i++) {
+      const id = virtualContext!.getRowId(data[i], i)
+      initialSelectedSnapshot.set(id, adapter.isSelected(id))
+    }
+
+    isDragging.value = true
+    startY = clientY
+    lastMouseY = clientY
+    lastEndIndex = -1
+
+    // In virtual mode, scroll parent is the virtualizer's scroll element
+    const virt = virtualContext!.getVirtualizer()
+    cachedScrollParent = virt?.scrollElement ?? (containerRef.value ? getScrollParent(containerRef.value) : null)
+
+    createMarquee()
+    updateMarquee(clientY)
+    applyRangeVirtual(startRowIndex)
+    window.getSelection()?.removeAllRanges()
+  }
+
+  let moveRAF = 0
+
   function onMouseMove(e: MouseEvent) {
     if (!isDragging.value) return
     lastMouseY = e.clientY
-    updateMarquee(e.clientY)
-    const rowIdx = findRowIndexAtY(e.clientY)
-    if (rowIdx >= 0 && rowIdx !== lastEndIndex) applyRange(rowIdx)
+    const findIdx = virtualContext ? findRowIndexAtYVirtual : findRowIndexAtY
+    const apply = virtualContext ? applyRangeVirtual : applyRange
+    cancelAnimationFrame(moveRAF)
+    moveRAF = requestAnimationFrame(() => {
+      updateMarquee(lastMouseY)
+      const rowIdx = findIdx(lastMouseY)
+      if (rowIdx >= 0 && rowIdx !== lastEndIndex) apply(rowIdx)
+    })
     autoScroll(e)
   }
 
   function onWheel() {
     if (!isDragging.value) return
+    const findIdx = virtualContext ? findRowIndexAtYVirtual : findRowIndexAtY
+    const apply = virtualContext ? applyRangeVirtual : applyRange
     // After wheel scroll, rows shift in viewport — re-check selection
     requestAnimationFrame(() => {
       if (!isDragging.value) return // guard: drag may have ended before this frame
-      const rowIdx = findRowIndexAtY(lastMouseY)
-      if (rowIdx >= 0) applyRange(rowIdx)
+      const rowIdx = findIdx(lastMouseY)
+      if (rowIdx >= 0) apply(rowIdx)
     })
   }
 
@@ -332,6 +516,7 @@ export function useSwipeSelect(
     cachedRows = []
     initialSelectedSnapshot.clear()
     cachedScrollParent = null
+    cancelAnimationFrame(moveRAF)
     stopAutoScroll()
     removeMarquee()
     document.removeEventListener('selectstart', onSelectStart)
@@ -372,13 +557,15 @@ export function useSwipeSelect(
     }
 
     if (dy !== 0) {
+      const findIdx = virtualContext ? findRowIndexAtYVirtual : findRowIndexAtY
+      const apply = virtualContext ? applyRangeVirtual : applyRange
       const step = () => {
         const prevScrollTop = scrollEl.scrollTop
         scrollEl.scrollTop += dy
         // Only re-check selection if scroll actually moved
         if (scrollEl.scrollTop !== prevScrollTop) {
-          const rowIdx = findRowIndexAtY(lastMouseY)
-          if (rowIdx >= 0 && rowIdx !== lastEndIndex) applyRange(rowIdx)
+          const rowIdx = findIdx(lastMouseY)
+          if (rowIdx >= 0 && rowIdx !== lastEndIndex) apply(rowIdx)
         }
         scrollRAF = requestAnimationFrame(step)
       }

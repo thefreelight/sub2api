@@ -72,7 +72,12 @@ func (h *APIKeyHandler) List(c *gin.Context) {
 	}
 
 	page, pageSize := response.ParsePagination(c)
-	params := pagination.PaginationParams{Page: page, PageSize: pageSize}
+	params := pagination.PaginationParams{
+		Page:      page,
+		PageSize:  pageSize,
+		SortBy:    c.DefaultQuery("sort_by", "created_at"),
+		SortOrder: c.DefaultQuery("sort_order", "desc"),
+	}
 
 	// Parse filter parameters
 	var filters service.APIKeyListFilters
@@ -126,7 +131,7 @@ func (h *APIKeyHandler) GetByID(c *gin.Context) {
 
 	// 验证所有权
 	if key.UserID != subject.UserID {
-		response.Forbidden(c, "Not authorized to access this key")
+		response.NotFound(c, "API key not found")
 		return
 	}
 
