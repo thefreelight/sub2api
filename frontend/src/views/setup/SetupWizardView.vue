@@ -493,6 +493,7 @@
 import { ref, reactive, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { testDatabase, testRedis, install, type InstallRequest } from '@/api/setup'
+import { buildGatewayUrl } from '@/api/client'
 import Select from '@/components/common/Select.vue'
 import Toggle from '@/components/common/Toggle.vue'
 import Icon from '@/components/icons/Icon.vue'
@@ -565,7 +566,7 @@ const canProceed = computed(() => {
     case 2:
       return (
         formData.admin.email &&
-        formData.admin.password.length >= 6 &&
+        formData.admin.password.length >= 8 &&
         formData.admin.password === confirmPassword.value
       )
     default:
@@ -582,8 +583,9 @@ async function testDatabaseConnection() {
     await testDatabase(formData.database)
     dbConnected.value = true
   } catch (error: unknown) {
-    const err = error as { response?: { data?: { detail?: string } }; message?: string }
-    errorMessage.value = err.response?.data?.detail || err.message || 'Connection failed'
+    const err = error as { response?: { data?: { detail?: string; message?: string } }; message?: string }
+    errorMessage.value =
+      err.response?.data?.detail || err.response?.data?.message || err.message || 'Connection failed'
   } finally {
     testingDb.value = false
   }
@@ -598,8 +600,9 @@ async function testRedisConnection() {
     await testRedis(formData.redis)
     redisConnected.value = true
   } catch (error: unknown) {
-    const err = error as { response?: { data?: { detail?: string } }; message?: string }
-    errorMessage.value = err.response?.data?.detail || err.message || 'Connection failed'
+    const err = error as { response?: { data?: { detail?: string; message?: string } }; message?: string }
+    errorMessage.value =
+      err.response?.data?.detail || err.response?.data?.message || err.message || 'Connection failed'
   } finally {
     testingRedis.value = false
   }
@@ -622,8 +625,9 @@ async function performInstall() {
     // Start polling for service restart
     waitForServiceRestart()
   } catch (error: unknown) {
-    const err = error as { response?: { data?: { detail?: string } }; message?: string }
-    errorMessage.value = err.response?.data?.detail || err.message || 'Installation failed'
+    const err = error as { response?: { data?: { detail?: string; message?: string } }; message?: string }
+    errorMessage.value =
+      err.response?.data?.detail || err.response?.data?.message || err.message || 'Installation failed'
   } finally {
     installing.value = false
   }
@@ -641,7 +645,7 @@ async function waitForServiceRestart() {
     try {
       // Use setup status endpoint as it tells us the real mode
       // Service might return 404 or connection refused while restarting
-      const response = await fetch('/setup/status', {
+      const response = await fetch(buildGatewayUrl('/setup/status'), {
         method: 'GET',
         cache: 'no-store'
       })

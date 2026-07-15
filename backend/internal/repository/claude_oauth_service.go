@@ -197,11 +197,6 @@ func (s *claudeOAuthService) ExchangeCodeForToken(ctx context.Context, code, cod
 		reqBody["state"] = codeState
 	}
 
-	// Setup token requires longer expiration (1 year)
-	if isSetupToken {
-		reqBody["expires_in"] = 31536000 // 365 * 24 * 60 * 60 seconds
-	}
-
 	logger.LegacyPrintf("repository.claude_oauth", "[OAuth] Step 3: Exchanging code for token at %s", s.tokenURL)
 	reqBodyJSON, _ := json.Marshal(logredact.RedactMap(reqBody))
 	logger.LegacyPrintf("repository.claude_oauth", "[OAuth] Step 3 Request Body: %s", string(reqBodyJSON))
@@ -212,7 +207,7 @@ func (s *claudeOAuthService) ExchangeCodeForToken(ctx context.Context, code, cod
 		SetContext(ctx).
 		SetHeader("Accept", "application/json, text/plain, */*").
 		SetHeader("Content-Type", "application/json").
-		SetHeader("User-Agent", "axios/1.8.4").
+		SetHeader("User-Agent", "axios/1.13.6").
 		SetBody(reqBody).
 		SetSuccessResult(&tokenResp).
 		Post(s.tokenURL)
@@ -250,7 +245,7 @@ func (s *claudeOAuthService) RefreshToken(ctx context.Context, refreshToken, pro
 		SetContext(ctx).
 		SetHeader("Accept", "application/json, text/plain, */*").
 		SetHeader("Content-Type", "application/json").
-		SetHeader("User-Agent", "axios/1.8.4").
+		SetHeader("User-Agent", "axios/1.13.6").
 		SetBody(reqBody).
 		SetSuccessResult(&tokenResp).
 		Post(s.tokenURL)
@@ -281,5 +276,5 @@ func createReqClient(proxyURL string) (*req.Client, error) {
 		client.SetProxyURL(trimmed)
 	}
 
-	return client, nil
+	return instrumentReqClient(client), nil
 }

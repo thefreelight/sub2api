@@ -59,7 +59,28 @@
         <div class="rounded-xl bg-gray-50 p-4 dark:bg-dark-900">
           <div class="text-xs font-bold uppercase tracking-wider text-gray-400">{{ t('admin.ops.errorDetail.model') }}</div>
           <div class="mt-1 text-sm font-medium text-gray-900 dark:text-white">
-            {{ detail.model || '—' }}
+            <template v-if="hasModelMapping(detail)">
+              <span class="font-mono">{{ detail.requested_model }}</span>
+              <span class="mx-1 text-gray-400">→</span>
+              <span class="font-mono text-primary-600 dark:text-primary-400">{{ detail.upstream_model }}</span>
+            </template>
+            <template v-else>
+              {{ displayModel(detail) || '—' }}
+            </template>
+          </div>
+        </div>
+
+        <div class="rounded-xl bg-gray-50 p-4 dark:bg-dark-900">
+          <div class="text-xs font-bold uppercase tracking-wider text-gray-400">{{ t('admin.ops.errorDetail.inboundEndpoint') }}</div>
+          <div class="mt-1 break-all font-mono text-sm font-medium text-gray-900 dark:text-white">
+            {{ detail.inbound_endpoint || '—' }}
+          </div>
+        </div>
+
+        <div class="rounded-xl bg-gray-50 p-4 dark:bg-dark-900">
+          <div class="text-xs font-bold uppercase tracking-wider text-gray-400">{{ t('admin.ops.errorDetail.upstreamEndpoint') }}</div>
+          <div class="mt-1 break-all font-mono text-sm font-medium text-gray-900 dark:text-white">
+            {{ detail.upstream_endpoint || '—' }}
           </div>
         </div>
 
@@ -73,9 +94,41 @@
         </div>
 
         <div class="rounded-xl bg-gray-50 p-4 dark:bg-dark-900">
+          <div class="text-xs font-bold uppercase tracking-wider text-gray-400">{{ t('admin.ops.errorDetail.requestType') }}</div>
+          <div class="mt-1 text-sm font-medium text-gray-900 dark:text-white">
+            {{ formatRequestTypeLabel(detail.request_type) }}
+          </div>
+        </div>
+
+        <div class="rounded-xl bg-gray-50 p-4 dark:bg-dark-900">
           <div class="text-xs font-bold uppercase tracking-wider text-gray-400">{{ t('admin.ops.errorDetail.message') }}</div>
           <div class="mt-1 truncate text-sm font-medium text-gray-900 dark:text-white" :title="detail.message">
             {{ detail.message || '—' }}
+          </div>
+        </div>
+
+        <div v-if="detail.api_key_prefix" class="rounded-xl bg-gray-50 p-4 dark:bg-dark-900">
+          <div class="text-xs font-bold uppercase tracking-wider text-gray-400">{{ t('admin.ops.errorDetail.apiKeyPrefix') }}</div>
+          <div class="mt-1 font-mono text-sm font-medium text-gray-900 dark:text-white">
+            {{ detail.api_key_prefix }}
+          </div>
+        </div>
+
+        <div v-if="detail.attempted_key_prefix" class="rounded-xl bg-gray-50 p-4 dark:bg-dark-900">
+          <div class="text-xs font-bold uppercase tracking-wider text-gray-400">{{ t('admin.ops.errorDetail.attemptedKeyPrefix') }}</div>
+          <div class="mt-1 font-mono text-sm font-medium text-gray-900 dark:text-white">
+            {{ detail.attempted_key_prefix }}
+          </div>
+        </div>
+
+        <div v-if="detail.deleted_key_owner_email" class="rounded-xl bg-gray-50 p-4 dark:bg-dark-900">
+          <div class="text-xs font-bold uppercase tracking-wider text-gray-400">{{ t('admin.ops.errorDetail.deletedKeyOwner') }}</div>
+          <div class="mt-1 text-sm font-medium text-gray-900 dark:text-white">
+            {{ detail.deleted_key_owner_email }}
+            <span v-if="detail.deleted_key_name" class="ml-1 text-xs text-gray-500 dark:text-gray-400">({{ detail.deleted_key_name }})</span>
+            <span class="ml-2 inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-bold ring-1 ring-inset bg-red-50 text-red-700 ring-red-600/20 dark:bg-red-900/30 dark:text-red-400 dark:ring-red-500/30">
+              {{ t('admin.ops.errorDetail.keyDeletedBadge') }}
+            </span>
           </div>
         </div>
       </div>
@@ -211,6 +264,31 @@ function isUpstreamError(d: OpsErrorDetail | null): boolean {
   const phase = String(d.phase || '').toLowerCase()
   const owner = String(d.error_owner || '').toLowerCase()
   return phase === 'upstream' && owner === 'provider'
+}
+
+function formatRequestTypeLabel(type: number | null | undefined): string {
+  switch (type) {
+    case 1: return t('admin.ops.errorDetail.requestTypeSync')
+    case 2: return t('admin.ops.errorDetail.requestTypeStream')
+    case 3: return t('admin.ops.errorDetail.requestTypeWs')
+    default: return t('admin.ops.errorDetail.requestTypeUnknown')
+  }
+}
+
+function hasModelMapping(d: OpsErrorDetail | null): boolean {
+  if (!d) return false
+  const requested = String(d.requested_model || '').trim()
+  const upstream = String(d.upstream_model || '').trim()
+  return !!requested && !!upstream && requested !== upstream
+}
+
+function displayModel(d: OpsErrorDetail | null): string {
+  if (!d) return ''
+  const upstream = String(d.upstream_model || '').trim()
+  if (upstream) return upstream
+  const requested = String(d.requested_model || '').trim()
+  if (requested) return requested
+  return String(d.model || '').trim()
 }
 
 const correlatedUpstream = ref<OpsErrorDetail[]>([])

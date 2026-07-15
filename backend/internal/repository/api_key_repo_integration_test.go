@@ -86,6 +86,45 @@ func (s *APIKeyRepoSuite) TestGetByKey_NotFound() {
 	s.Require().Error(err, "expected error for non-existent key")
 }
 
+func (s *APIKeyRepoSuite) TestGetByKeyForAuth_PreservesMessagesDispatchModelConfig() {
+	user := s.mustCreateUser("getbykey-auth-dispatch@test.com")
+	group, err := s.client.Group.Create().
+		SetName("g-auth-dispatch").
+		SetPlatform(service.PlatformOpenAI).
+		SetStatus(service.StatusActive).
+		SetSubscriptionType(service.SubscriptionTypeStandard).
+		SetRateMultiplier(1).
+		SetAllowMessagesDispatch(true).
+		SetDefaultMappedModel("gpt-5.4").
+		SetMessagesDispatchModelConfig(service.OpenAIMessagesDispatchModelConfig{
+			OpusMappedModel:   "gpt-5.4-nano",
+			SonnetMappedModel: "gpt-5.3-codex",
+			HaikuMappedModel:  "gpt-5.4-mini",
+			ExactModelMappings: map[string]string{
+				"claude-sonnet-4.5": "gpt-5.4-nano",
+			},
+		}).
+		Save(s.ctx)
+	s.Require().NoError(err)
+
+	key := &service.APIKey{
+		UserID:  user.ID,
+		Key:     "sk-getbykey-auth-dispatch",
+		Name:    "Dispatch Key",
+		GroupID: &group.ID,
+		Status:  service.StatusActive,
+	}
+	s.Require().NoError(s.repo.Create(s.ctx, key))
+
+	got, err := s.repo.GetByKeyForAuth(s.ctx, key.Key)
+	s.Require().NoError(err)
+	s.Require().NotNil(got.Group)
+	s.Require().True(got.Group.AllowMessagesDispatch)
+	s.Require().Equal("gpt-5.4", got.Group.DefaultMappedModel)
+	s.Require().Equal("gpt-5.4-nano", got.Group.MessagesDispatchModelConfig.OpusMappedModel)
+	s.Require().Equal("gpt-5.4-nano", got.Group.MessagesDispatchModelConfig.ExactModelMappings["claude-sonnet-4.5"])
+}
+
 // --- Update ---
 
 func (s *APIKeyRepoSuite) TestUpdate() {
@@ -149,6 +188,31 @@ func (s *APIKeyRepoSuite) TestDelete() {
 
 	_, err = s.repo.GetByID(s.ctx, key.ID)
 	s.Require().Error(err, "expected error after delete")
+}
+
+func (s *APIKeyRepoSuite) TestCreate_AfterSoftDelete_AllowsSameKey() {
+	user := s.mustCreateUser("recreate-after-soft-delete@test.com")
+	const reusedKey = "sk-reuse-after-soft-delete"
+
+	first := &service.APIKey{
+		UserID: user.ID,
+		Key:    reusedKey,
+		Name:   "First Key",
+		Status: service.StatusActive,
+	}
+	s.Require().NoError(s.repo.Create(s.ctx, first), "create first key")
+
+	s.Require().NoError(s.repo.Delete(s.ctx, first.ID), "soft delete first key")
+
+	second := &service.APIKey{
+		UserID: user.ID,
+		Key:    reusedKey,
+		Name:   "Second Key",
+		Status: service.StatusActive,
+	}
+	s.Require().NoError(s.repo.Create(s.ctx, second), "create second key with same key")
+	s.Require().NotZero(second.ID)
+	s.Require().NotEqual(first.ID, second.ID, "recreated key should be a new row")
 }
 
 // --- ListByUserID / CountByUserID ---
@@ -490,4 +554,47 @@ func TestIncrementQuotaUsed_Concurrent(t *testing.T) {
 	require.NoError(t, err, "GetByID")
 	require.Equal(t, float64(goroutines)*increment, got.QuotaUsed,
 		"并发递增后总和应为 %v，实际为 %v", float64(goroutines)*increment, got.QuotaUsed)
+}
+
+func (s *APIKeyRepoSuite) TestDeleteWithAudit_WritesAuditAndSoftDeletes() {
+	user := s.mustCreateUser("delwithaudit@test.com")
+	key := &service.APIKey{
+		UserID: user.ID,
+		Key:    "sk-del-audit-1",
+		Name:   "Audit Me",
+		Status: service.StatusActive,
+	}
+	s.Require().NoError(s.repo.Create(s.ctx, key))
+
+	s.Require().NoError(s.repo.DeleteWithAudit(s.ctx, key.ID))
+
+	_, err := s.repo.GetByID(s.ctx, key.ID)
+	s.Require().Error(err)
+
+	rows, qErr := s.client.QueryContext(s.ctx,
+		`SELECT key, key_name, user_id, api_key_id FROM deleted_api_key_audits WHERE api_key_id = $1`, key.ID)
+	s.Require().NoError(qErr)
+	defer rows.Close()
+	s.Require().True(rows.Next(), "expected one audit row")
+	var auditKey, auditName string
+	var auditUserID, auditAPIKeyID int64
+	s.Require().NoError(rows.Scan(&auditKey, &auditName, &auditUserID, &auditAPIKeyID))
+	s.Require().Equal("sk-del-audit-1", auditKey)
+	s.Require().Equal("Audit Me", auditName)
+	s.Require().Equal(user.ID, auditUserID)
+	s.Require().Equal(key.ID, auditAPIKeyID)
+}
+
+func (s *APIKeyRepoSuite) TestDeleteWithAudit_RepeatIsIdempotent() {
+	user := s.mustCreateUser("delwithaudit-idem@test.com")
+	key := &service.APIKey{UserID: user.ID, Key: "sk-del-audit-2", Name: "K", Status: service.StatusActive}
+	s.Require().NoError(s.repo.Create(s.ctx, key))
+
+	s.Require().NoError(s.repo.DeleteWithAudit(s.ctx, key.ID))
+	s.Require().NoError(s.repo.DeleteWithAudit(s.ctx, key.ID))
+}
+
+func (s *APIKeyRepoSuite) TestDeleteWithAudit_NotFound() {
+	err := s.repo.DeleteWithAudit(s.ctx, 999999)
+	s.Require().ErrorIs(err, service.ErrAPIKeyNotFound)
 }
