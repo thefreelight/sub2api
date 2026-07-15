@@ -41,7 +41,6 @@ export async function list(
     search?: string
     privacy_mode?: string
     lite?: string
-    include_scheduler_score?: string
     sort_by?: string
     sort_order?: 'asc' | 'desc'
   },
@@ -77,7 +76,6 @@ export async function listWithEtag(
     search?: string
     privacy_mode?: string
     lite?: string
-    include_scheduler_score?: string
     sort_by?: string
     sort_order?: 'asc' | 'desc'
   },
@@ -204,30 +202,6 @@ export async function testAccount(id: number): Promise<{
  */
 export async function refreshCredentials(id: number): Promise<Account> {
   const { data } = await apiClient.post<Account>(`/admin/accounts/${id}/refresh`)
-  return data
-}
-
-/**
- * Apply OAuth credentials after re-authorization.
- *
- * Unlike `update()`, this endpoint:
- * - never overwrites the whole `extra` JSONB (merges incrementally instead),
- *   so persistent settings like `base_rpm`, `window_cost_limit`, `max_sessions`,
- *   `quota_*` and `privacy_mode` are preserved
- * - clears the account error and invalidates the token cache server-side
- */
-export async function applyOAuthCredentials(
-  id: number,
-  payload: {
-    type: 'oauth' | 'setup-token'
-    credentials: Record<string, unknown>
-    extra?: Record<string, unknown>
-  }
-): Promise<Account> {
-  const { data } = await apiClient.post<Account>(
-    `/admin/accounts/${id}/apply-oauth-credentials`,
-    payload
-  )
   return data
 }
 
@@ -560,9 +534,7 @@ export async function syncFromCrs(params: {
       action: string
       error?: string
     }>
-  }>('/admin/accounts/sync/crs', params, {
-    timeout: 180000 // 180s timeout: sync refreshes each existing account's OAuth token serially
-  })
+  }>('/admin/accounts/sync/crs', params)
   return data
 }
 
@@ -672,16 +644,6 @@ export interface BatchOperationResult {
 }
 
 /**
- * Revert account proxy to original before fallback
- * @param id - Account ID
- * @returns Success confirmation
- */
-export async function revertProxyFallback(id: number): Promise<{ message: string }> {
-  const { data } = await apiClient.post<{ message: string }>(`/admin/accounts/${id}/revert-proxy-fallback`)
-  return data
-}
-
-/**
  * Batch clear account errors
  * @param accountIds - Array of account IDs
  * @returns Batch operation result
@@ -714,6 +676,32 @@ export async function batchRefresh(accountIds: number[]): Promise<BatchOperation
  */
 export async function setPrivacy(id: number): Promise<Account> {
   const { data } = await apiClient.post<Account>(`/admin/accounts/${id}/set-privacy`)
+  return data
+}
+
+/**
+ * Revert a proxy fallback for an account (upstream v0.1.142).
+ */
+export async function revertProxyFallback(id: number): Promise<{ message: string }> {
+  const { data } = await apiClient.post<{ message: string }>(`/admin/accounts/${id}/revert-proxy-fallback`)
+  return data
+}
+
+/**
+ * Apply OAuth credentials to an account (upstream v0.1.142).
+ */
+export async function applyOAuthCredentials(
+  id: number,
+  payload: {
+    type: 'oauth' | 'setup-token'
+    credentials: Record<string, unknown>
+    extra?: Record<string, unknown>
+  }
+): Promise<Account> {
+  const { data } = await apiClient.post<Account>(
+    `/admin/accounts/${id}/apply-oauth-credentials`,
+    payload
+  )
   return data
 }
 
@@ -815,7 +803,6 @@ export const accountsAPI = {
   toggleStatus,
   testAccount,
   refreshCredentials,
-  applyOAuthCredentials,
   getStats,
   clearError,
   getUsage,
@@ -829,7 +816,6 @@ export const accountsAPI = {
   setSchedulable,
   getAvailableModels,
   syncUpstreamModels,
-  syncUpstreamModelsPreview,
   generateAuthUrl,
   exchangeCode,
   refreshOpenAIToken,
@@ -849,7 +835,9 @@ export const accountsAPI = {
   revertProxyFallback,
   queryOpenAIQuota,
   resetOpenAIQuota,
-  createSparkShadow
+  createSparkShadow,
+  applyOAuthCredentials,
+  syncUpstreamModelsPreview
 }
 
 export default accountsAPI

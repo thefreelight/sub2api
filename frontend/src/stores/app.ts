@@ -13,27 +13,28 @@ import {
   type ReleaseInfo
 } from '@/api/admin/system'
 import { getPublicSettings as fetchPublicSettingsAPI } from '@/api/auth'
+import { isAdminComplianceRequiredError } from '@/utils/adminCompliance'
+
+const DEFAULT_SITE_NAME = 'NavtoAI API'
 
 export const useAppStore = defineStore('app', () => {
   // ==================== State ====================
 
   const sidebarCollapsed = ref<boolean>(false)
   const mobileOpen = ref<boolean>(false)
-  const sidebarScrollTop = ref<number>(0)
   const loading = ref<boolean>(false)
   const toasts = ref<Toast[]>([])
 
   // Public settings cache state
   const publicSettingsLoaded = ref<boolean>(false)
   const publicSettingsLoading = ref<boolean>(false)
-  const siteName = ref<string>('Sub2API')
+  const siteName = ref<string>(DEFAULT_SITE_NAME)
   const siteLogo = ref<string>('')
   const siteVersion = ref<string>('')
   const contactInfo = ref<string>('')
   const apiBaseUrl = ref<string>('')
   const docUrl = ref<string>('')
   const cachedPublicSettings = ref<PublicSettings | null>(null)
-  let publicSettingsRequest: Promise<PublicSettings | null> | null = null
 
   // Version cache state
   const versionLoaded = ref<boolean>(false)
@@ -43,6 +44,8 @@ export const useAppStore = defineStore('app', () => {
   const hasUpdate = ref<boolean>(false)
   const buildType = ref<string>('source')
   const releaseInfo = ref<ReleaseInfo | null>(null)
+  const versionWarning = ref<string>('')
+  const customDeployRequired = ref<boolean>(false)
 
   // Auto-incrementing ID for toasts
   let toastIdCounter = 0
@@ -212,6 +215,9 @@ export const useAppStore = defineStore('app', () => {
     try {
       return await operation()
     } catch (error) {
+      if (isAdminComplianceRequiredError(error)) {
+        return null
+      }
       const message =
         errorMessage ||
         (error as { message?: string }).message ||
@@ -249,6 +255,8 @@ export const useAppStore = defineStore('app', () => {
         has_update: hasUpdate.value,
         build_type: buildType.value,
         release_info: releaseInfo.value || undefined,
+        warning: versionWarning.value || undefined,
+        custom_deploy_required: customDeployRequired.value,
         cached: true
       }
     }
@@ -266,6 +274,8 @@ export const useAppStore = defineStore('app', () => {
       hasUpdate.value = data.has_update
       buildType.value = data.build_type || 'source'
       releaseInfo.value = data.release_info || null
+      versionWarning.value = data.warning || ''
+      customDeployRequired.value = data.custom_deploy_required || false
       versionLoaded.value = true
       return data
     } catch (error) {
@@ -282,6 +292,8 @@ export const useAppStore = defineStore('app', () => {
   function clearVersionCache(): void {
     versionLoaded.value = false
     hasUpdate.value = false
+    versionWarning.value = ''
+    customDeployRequired.value = false
   }
 
   // ==================== Public Settings Management ====================
@@ -294,7 +306,7 @@ export const useAppStore = defineStore('app', () => {
       window.__APP_CONFIG__ = { ...config }
     }
     cachedPublicSettings.value = config
-    siteName.value = config.site_name || 'Sub2API'
+    siteName.value = config.site_name || DEFAULT_SITE_NAME
     siteLogo.value = config.site_logo || ''
     siteVersion.value = config.version || ''
     contactInfo.value = config.contact_info || ''
@@ -307,25 +319,19 @@ export const useAppStore = defineStore('app', () => {
    * Fetch public settings (uses cache unless force=true)
    * @param force - Force refresh from API
    */
-  function fetchPublicSettings(force = false): Promise<PublicSettings | null> {
-    // An active request always wins over cache/force semantics so every caller observes
-    // the same refresh result and no older request can overwrite a newer one.
-    if (publicSettingsRequest) {
-      return publicSettingsRequest
-    }
-
+  async function fetchPublicSettings(force = false): Promise<PublicSettings | null> {
     // Check for injected config from server (eliminates flash)
     if (!publicSettingsLoaded.value && !force && window.__APP_CONFIG__) {
       applySettings(window.__APP_CONFIG__)
-      return Promise.resolve(window.__APP_CONFIG__)
+      return window.__APP_CONFIG__
     }
 
     // Return cached data if available and not forcing refresh
     if (publicSettingsLoaded.value && !force) {
       if (cachedPublicSettings.value) {
-        return Promise.resolve({ ...cachedPublicSettings.value })
+        return { ...cachedPublicSettings.value }
       }
-      return Promise.resolve({
+      return {
         registration_enabled: false,
         email_verify_enabled: false,
         force_email_on_third_party_signup: false,
@@ -368,38 +374,25 @@ export const useAppStore = defineStore('app', () => {
         risk_control_enabled: false,
         service_quota_enabled: false,
         affiliate_enabled: false,
-        allow_user_view_error_requests: false,
-      })
+      }
+    }
+
+    // Prevent duplicate requests
+    if (publicSettingsLoading.value) {
+      return null
     }
 
     publicSettingsLoading.value = true
-    let apiRequest: Promise<PublicSettings>
     try {
-      apiRequest = fetchPublicSettingsAPI()
+      const data = await fetchPublicSettingsAPI()
+      applySettings(data)
+      return data
     } catch (error) {
       console.error('Failed to fetch public settings:', error)
+      return null
+    } finally {
       publicSettingsLoading.value = false
-      return Promise.resolve(null)
     }
-
-    const request = apiRequest
-      .then((data) => {
-        applySettings(data)
-        return data
-      })
-      .catch((error) => {
-        console.error('Failed to fetch public settings:', error)
-        return null
-      })
-      .finally(() => {
-        if (publicSettingsRequest === request) {
-          publicSettingsRequest = null
-          publicSettingsLoading.value = false
-        }
-      })
-
-    publicSettingsRequest = request
-    return request
   }
 
   /**
@@ -429,7 +422,6 @@ export const useAppStore = defineStore('app', () => {
     // State
     sidebarCollapsed,
     mobileOpen,
-    sidebarScrollTop,
     loading,
     toasts,
 
@@ -451,6 +443,8 @@ export const useAppStore = defineStore('app', () => {
     hasUpdate,
     buildType,
     releaseInfo,
+    versionWarning,
+    customDeployRequired,
 
     // Computed
     hasActiveToasts,

@@ -86,7 +86,6 @@ export interface User {
   wechat_bound?: boolean
   role: 'admin' | 'user' // User role for authorization
   balance: number // User balance for API usage
-  frozen_balance?: number // Balance currently held by async batch jobs
   concurrency: number // Allowed concurrent requests
   rpm_limit?: number // User-level RPM cap (0 = unlimited); effective as fallback when group has no rpm_limit
   status: 'active' | 'disabled' // Account status
@@ -98,7 +97,6 @@ export interface User {
   last_active_at?: string | null
   created_at: string
   updated_at: string
-  deleted_at?: string | null
 }
 
 export interface AdminUser extends User {
@@ -518,21 +516,11 @@ export interface Group {
   monthly_limit_usd: number | null
   // 图片生成计费配置
   allow_image_generation: boolean
-  allow_batch_image_generation: boolean
   image_rate_independent: boolean
   image_rate_multiplier: number
-  batch_image_discount_multiplier: number
-  batch_image_hold_multiplier: number
   image_price_1k: number | null
   image_price_2k: number | null
   image_price_4k: number | null
-  video_rate_independent: boolean
-  video_rate_multiplier: number
-  video_price_480p: number | null
-  video_price_720p: number | null
-  video_price_1080p: number | null
-  // Codex 网页搜索单次价格（USD/次）；null 表示使用默认价 0.01
-  web_search_price_per_call: number | null
   // 高峰时段倍率配置
   peak_rate_enabled: boolean
   peak_start: string
@@ -571,15 +559,9 @@ export interface AdminGroup extends Group {
   // OpenAI Messages 调度配置（仅 openai 平台使用）
   default_mapped_model?: string
   messages_dispatch_model_config?: OpenAIMessagesDispatchModelConfig
-  models_list_config?: ModelsListConfig
 
   // 分组排序
   sort_order: number
-}
-
-export interface ModelsListConfig {
-  enabled: boolean
-  models: string[]
 }
 
 export interface ApiKey {
@@ -592,7 +574,6 @@ export interface ApiKey {
   ip_whitelist: string[]
   ip_blacklist: string[]
   last_used_at: string | null
-  last_used_ip: string | null
   quota: number // Quota limit in USD (0 = unlimited)
   quota_used: number // Used quota amount in USD
   expires_at: string | null // Expiration time (null = never expires)
@@ -653,20 +634,11 @@ export interface CreateGroupRequest {
   weekly_limit_usd?: number | null
   monthly_limit_usd?: number | null
   allow_image_generation?: boolean
-  allow_batch_image_generation?: boolean
   image_rate_independent?: boolean
   image_rate_multiplier?: number
-  batch_image_discount_multiplier?: number
-  batch_image_hold_multiplier?: number
   image_price_1k?: number | null
   image_price_2k?: number | null
   image_price_4k?: number | null
-  video_rate_independent?: boolean
-  video_rate_multiplier?: number
-  video_price_480p?: number | null
-  video_price_720p?: number | null
-  video_price_1080p?: number | null
-  web_search_price_per_call?: number | null
   peak_rate_enabled?: boolean
   peak_start?: string
   peak_end?: string
@@ -676,13 +648,6 @@ export interface CreateGroupRequest {
   fallback_group_id_on_invalid_request?: number | null
   mcp_xml_inject?: boolean
   supported_model_scopes?: string[]
-  models_list_config?: ModelsListConfig
-  allow_messages_dispatch?: boolean
-  default_mapped_model?: string
-  messages_dispatch_model_config?: OpenAIMessagesDispatchModelConfig
-  model_routing?: Record<string, number[]> | null
-  model_routing_enabled?: boolean
-  rpm_limit?: number
   require_oauth_only?: boolean
   require_privacy_set?: boolean
   // 从指定分组复制账号
@@ -701,20 +666,11 @@ export interface UpdateGroupRequest {
   weekly_limit_usd?: number | null
   monthly_limit_usd?: number | null
   allow_image_generation?: boolean
-  allow_batch_image_generation?: boolean
   image_rate_independent?: boolean
   image_rate_multiplier?: number
-  batch_image_discount_multiplier?: number
-  batch_image_hold_multiplier?: number
   image_price_1k?: number | null
   image_price_2k?: number | null
   image_price_4k?: number | null
-  video_rate_independent?: boolean
-  video_rate_multiplier?: number
-  video_price_480p?: number | null
-  video_price_720p?: number | null
-  video_price_1080p?: number | null
-  web_search_price_per_call?: number | null
   peak_rate_enabled?: boolean
   peak_start?: string
   peak_end?: string
@@ -724,13 +680,6 @@ export interface UpdateGroupRequest {
   fallback_group_id_on_invalid_request?: number | null
   mcp_xml_inject?: boolean
   supported_model_scopes?: string[]
-  models_list_config?: ModelsListConfig
-  allow_messages_dispatch?: boolean
-  default_mapped_model?: string
-  messages_dispatch_model_config?: OpenAIMessagesDispatchModelConfig
-  model_routing?: Record<string, number[]> | null
-  model_routing_enabled?: boolean
-  rpm_limit?: number
   require_oauth_only?: boolean
   require_privacy_set?: boolean
   copy_accounts_from_group_ids?: number[]
@@ -883,8 +832,6 @@ export interface Account {
     antigravity_credits_overages?: Record<string, { activated_at: string; active_until: string }>
   } & Record<string, unknown>)
   proxy_id: number | null
-  proxy_fallback_origin_id?: number | null
-  proxy_fallback_origin_name?: string | null
   concurrency: number
   load_factor?: number | null
   current_concurrency?: number // Real-time concurrency count from Redis
@@ -1020,38 +967,10 @@ export interface AntigravityModelQuota {
 }
 
 export interface GrokQuotaWindow {
-  limit?: number | null
-  remaining?: number | null
-  reset_unix?: number | null
-  reset_at?: string | null
-}
-
-export interface GrokBillingProductUsage {
-  product: string
-  usage_percent?: number | null
-}
-
-export interface GrokBillingSummary {
-  period_type?: string
-  usage_percent?: number | null
-  period_start?: string
-  period_end?: string
-  product_usage?: GrokBillingProductUsage[]
-  monthly_limit_cents?: number | null
-  used_cents?: number | null
-  included_used_cents?: number | null
-  billing_period_start?: string
-  billing_period_end?: string
-  used_percent?: number | null
-  plan?: string
-  status_code?: number
-  source?: string
-  fetched_at?: string
-  updated_at?: string
-  weekly_updated_at?: string
-  monthly_updated_at?: string
-  partial?: boolean
-  failed_windows?: string[]
+  limit?: number
+  remaining?: number
+  reset_unix?: number
+  reset_at?: string
 }
 
 export interface AccountUsageInfo {
@@ -1077,12 +996,6 @@ export interface AccountUsageInfo {
   grok_last_headers_seen_at?: string
   grok_last_status_code?: number
   grok_local_usage?: WindowStats | null
-  grok_local_usage_24h?: WindowStats | null
-  grok_local_usage_7d?: WindowStats | null
-  grok_local_usage_monthly?: WindowStats | null
-  grok_billing?: GrokBillingSummary | null
-  subscription_tier?: string
-  subscription_tier_raw?: string
   ai_credits?: Array<{
     credit_type?: string
     amount?: number
@@ -1132,7 +1045,6 @@ export interface CodexUsageSnapshot {
 
 export type OpenAICompactMode = 'auto' | 'force_on' | 'force_off'
 export type OpenAIResponsesMode = 'auto' | 'force_responses' | 'force_chat_completions'
-export type OpenAIEndpointCapability = 'chat_completions' | 'embeddings'
 
 export interface OpenAICompactState {
   openai_compact_mode?: OpenAICompactMode
@@ -1225,10 +1137,6 @@ export interface UpdateProxyRequest {
   username?: string | null
   password?: string | null
   status?: 'active' | 'inactive'
-  expires_at?: number | null   // unix 秒；null/0 = 永不过期
-  fallback_mode?: 'none' | 'proxy' | 'direct'
-  backup_proxy_id?: number | null
-  expiry_warn_days?: number
 }
 
 export interface AdminDataPayload {
@@ -1382,13 +1290,12 @@ export interface UsageLog {
   total_cost: number
   actual_cost: number
   rate_multiplier: number
-  long_context_billing_applied: boolean
   billing_type: number
 
   request_type?: UsageRequestType
   stream: boolean
   openai_ws_mode?: boolean
-  duration_ms: number | null
+  duration_ms: number
   first_token_ms: number | null
 
   // 图片生成字段
@@ -1396,10 +1303,10 @@ export interface UsageLog {
   image_size: string | null
   image_input_size: string | null
   image_output_size: string | null
-  image_size_source: ImageSizeSource | null
-  image_size_breakdown: ImageSizeBreakdown | null
   image_output_tokens: number
   image_output_cost: number
+  image_size_source: ImageSizeSource | null
+  image_size_breakdown: ImageSizeBreakdown | null
 
   // User-Agent
   user_agent: string | null
@@ -1474,13 +1381,12 @@ export interface RedeemCode {
   code: string
   type: RedeemCodeType
   value: number
-  status: 'active' | 'used' | 'expired' | 'unused' | 'disabled'
+  status: 'active' | 'used' | 'expired' | 'unused'
   used_by: number | null
   used_at: string | null
   created_at: string
   expires_at?: string | null
   updated_at?: string
-  notes?: string
   group_id?: number | null // 订阅类型专用
   validity_days?: number // 订阅类型专用
   user?: User
@@ -1495,18 +1401,6 @@ export interface GenerateRedeemCodesRequest {
   validity_days?: number // 订阅类型专用
   expires_at?: string | null
   expires_in_days?: number
-}
-
-export interface BatchUpdateRedeemCodeFields {
-  status?: 'unused' | 'disabled'
-  expires_at?: string | null
-  notes?: string
-  group_id?: number | null
-}
-
-export interface BatchUpdateRedeemCodesRequest {
-  ids: number[]
-  fields: BatchUpdateRedeemCodeFields
 }
 
 export interface RedeemCodeRequest {
@@ -1572,8 +1466,6 @@ export interface UsageStatsResponse {
   total_input_tokens: number
   total_output_tokens: number
   total_cache_tokens: number
-  total_cache_read_tokens: number
-  total_cache_creation_tokens: number
   total_tokens: number
   total_cost: number // 标准计费
   total_actual_cost: number // 实际扣除
@@ -1629,13 +1521,40 @@ export interface GroupStat {
   account_cost?: number // 账号成本（仅管理员接口返回）
 }
 
+export interface UserErrorRequest {
+  id: number
+  created_at: string
+  model: string
+  inbound_endpoint: string
+  status_code: number
+  category: string
+  platform: string
+  message: string
+  key_name: string
+  key_deleted: boolean
+}
+
+export interface UserErrorRequestDetail extends UserErrorRequest {
+  error_body: string
+  upstream_status_code?: number
+}
+
+export interface UserErrorListParams {
+  page?: number
+  page_size?: number
+  start_date?: string
+  end_date?: string
+  timezone?: string
+  model?: string
+  status_code?: number
+  category?: string
+  api_key_id?: number
+}
+
 export interface UserBreakdownItem {
   user_id: number
   email: string
   requests: number
-  input_tokens: number
-  output_tokens: number
-  cache_tokens: number
   total_tokens: number
   cost: number
   actual_cost: number
@@ -2089,6 +2008,7 @@ export interface UpdateScheduledTestPlanRequest {
 // Payment types
 export type { SubscriptionPlan, PaymentOrder, CheckoutInfoResponse } from './payment'
 
+// Platform quota types (re-exported from users admin API for convenience)
 export type {
   PlatformQuotaItem,
   PlatformQuotaUpdateItem,

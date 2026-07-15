@@ -94,7 +94,7 @@
               :sort-key="sortKey"
               :sort-order="sortOrder"
             >
-              <div :class="['flex items-center space-x-1', getHeaderContentAlignmentClass(column)]">
+              <div class="flex items-center space-x-1">
                 <span>{{ column.label }}</span>
                 <span
                   v-if="column.sortable"
@@ -154,7 +154,7 @@
           </td>
         </tr>
 
-        <!-- Data rows: windowed when large, fully rendered when small (shared row/cell template) -->
+        <!-- Data rows (virtual scroll) -->
         <template v-else>
           <tr v-if="virtualPaddingTop > 0" aria-hidden="true">
             <td :colspan="columns.length"
@@ -162,14 +162,14 @@
             </td>
           </tr>
           <tr
-            v-for="item in renderRows"
-            :key="resolveRowKey(item.row, item.index)"
-            :data-row-id="resolveRowKey(item.row, item.index)"
-            :data-index="item.index"
-            :ref="item.measure ? measureElement : undefined"
+            v-for="virtualRow in virtualItems"
+            :key="resolveRowKey(sortedData[virtualRow.index], virtualRow.index)"
+            :data-row-id="resolveRowKey(sortedData[virtualRow.index], virtualRow.index)"
+            :data-index="virtualRow.index"
+            :ref="measureElement"
             class="hover:bg-gray-50 dark:hover:bg-dark-800"
             :class="{ 'cursor-pointer': clickableRows }"
-            @click="clickableRows && emit('rowClick', item.row)"
+            @click="clickableRows && emit('rowClick', sortedData[virtualRow.index])"
           >
             <td
               v-for="(column, colIndex) in columns"
@@ -182,12 +182,12 @@
               ]"
             >
               <slot :name="`cell-${column.key}`"
-                    :row="item.row"
-                    :value="item.row[column.key]"
+                    :row="sortedData[virtualRow.index]"
+                    :value="sortedData[virtualRow.index][column.key]"
                     :expanded="actionsExpanded">
                 {{ column.formatter
-                   ? column.formatter(item.row[column.key], item.row)
-                   : item.row[column.key] }}
+                   ? column.formatter(sortedData[virtualRow.index][column.key], sortedData[virtualRow.index])
+                   : sortedData[virtualRow.index][column.key] }}
               </slot>
             </td>
           </tr>
@@ -204,7 +204,7 @@
 
 <script setup lang="ts">
 import { computed, ref, onMounted, onUnmounted, watch, nextTick } from 'vue'
-import { useVirtualizer, observeElementRect as observeElementRectDefault } from '@tanstack/vue-virtual'
+import { useVirtualizer } from '@tanstack/vue-virtual'
 import { useI18n } from 'vue-i18n'
 import type { Column } from './types'
 import Icon from '@/components/icons/Icon.vue'
@@ -226,27 +226,6 @@ const tableWrapperRef = ref<HTMLElement | null>(null)
 const isScrollable = ref(false)
 const actionsColumnNeedsExpanding = ref(false)
 
-// --- 虚拟滚动「整表空白」根治 ---
-// 根因:本组件根 .table-wrapper 为 flex:1 / min-h-0,高度由父级 flex 链决定。@tanstack 虚拟化器
-// 仅在 observeElementRect 回调里写 scrollRect;一旦该回调读到 0 高度(加载瞬间 flex 未结算,或
-// 滚动中动态行高校正触发的 reflow),scrollRect 被钉死为 0 → calculateRange 返回 null → 整表空白。
-// 对策(见下方 virtualizer 选项):
-//   1) 覆写 observeElementRect,直接丢弃 height<=0 的读数,scrollRect 永不被钉成 0;
-//   2) initialRect 给一屏兜底高度,首个有效读数到来前也有行可渲染,绝不空白。
-// 兜底高度:表格区域大致 = 视口高度 - 顶栏/外边距/筛选/分页 ≈ 320px
-const estimatedViewportHeight = () => {
-  if (typeof window === 'undefined') return 600
-  return Math.max(window.innerHeight - 320, 400)
-}
-
-// 覆写默认 observeElementRect:过滤掉 0 高度读数(根治整表空白的关键)
-const observeElementRectNonZero = (
-  instance: any,
-  cb: (rect: { width: number; height: number }) => void
-) => observeElementRectDefault(instance, (rect) => {
-  if (rect.height > 0) cb(rect)
-})
-
 // 检查是否可滚动
 const checkScrollable = () => {
   if (tableWrapperRef.value) {
@@ -256,11 +235,6 @@ const checkScrollable = () => {
 
 // 检查操作列是否需要展开
 const checkActionsColumnWidth = () => {
-  if (!props.expandableActions) {
-    actionsColumnNeedsExpanding.value = false
-    actionsExpanded.value = false
-    return
-  }
   if (!tableWrapperRef.value) return
 
   // 查找第一行的操作列单元格
@@ -397,12 +371,6 @@ interface Props {
   estimateRowHeight?: number
   /** Number of rows to render beyond the visible area (default 5) */
   overscan?: number
-  /**
-   * Only virtualize when the row count exceeds this threshold (default 100).
-   * Smaller lists render in full, avoiding the scroll-compensation jank caused by
-   * estimated-vs-actual row heights when rows have variable height.
-   */
-  virtualizeThreshold?: number
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -494,13 +462,6 @@ const getSortIndicatorClass = (key: string, order: 'asc' | 'desc') => {
 const getColumnAriaSort = (key: string) => {
   if (sortKey.value !== key) return 'none'
   return sortOrder.value === 'asc' ? 'ascending' : 'descending'
-}
-
-const getHeaderContentAlignmentClass = (column: Column) => {
-  const className = column.class || ''
-  if (className.includes('text-center')) return 'justify-center'
-  if (className.includes('text-right')) return 'justify-end'
-  return 'justify-start'
 }
 
 const isNullishOrEmpty = (value: any) => value === null || value === undefined || value === ''
@@ -633,29 +594,11 @@ const sortedData = computed(() => {
 })
 
 // --- Virtual scrolling ---
-// 是否启用虚拟化:仅桌面端且行数超过阈值时开启。小列表全量渲染,彻底绕开虚拟器的
-// 估算/测量/滚动补偿链路,消除可变行高导致的滚动抖动。
-const shouldVirtualize = computed(() =>
-  isDesktopViewport.value && (sortedData.value?.length ?? 0) > (props.virtualizeThreshold ?? 100)
-)
-
 const rowVirtualizer = useVirtualizer(computed(() => ({
-  count: shouldVirtualize.value ? (sortedData.value?.length ?? 0) : 0,
+  count: isDesktopViewport.value ? (sortedData.value?.length ?? 0) : 0,
   getScrollElement: () => tableWrapperRef.value,
-  // 用行主键(与模板 :key 一致)而非默认的 index 作为 itemSizeCache 键,
-  // 这样排序/筛选/跨阈值来回都能复用正确的已测行高,而不是残留的按 index 缓存 → 消除高度校正抖动。
-  getItemKey: (index: number) => {
-    const row = sortedData.value?.[index]
-    return row != null ? resolveRowKey(row, index) : index
-  },
   estimateSize: () => props.estimateRowHeight ?? 56,
   overscan: props.overscan ?? 5,
-  // 兜底高度:首个有效高度读数到来前,先按一屏渲染,避免空白帧
-  initialRect: { width: 0, height: estimatedViewportHeight() },
-  // 关键:过滤 0 高度读数,杜绝 scrollRect 被钉成 0 → calculateRange 返回 null → 整表空白
-  observeElementRect: observeElementRectNonZero,
-  // 把测量类 ResizeObserver 回调批到 rAF,避免滚动中同步 reflow 风暴导致的校正抖动/空白
-  useAnimationFrameWithResizeObserver: true,
 })))
 
 const virtualItems = computed(() => rowVirtualizer.value.getVirtualItems())
@@ -676,16 +619,6 @@ const measureElement = (el: any) => {
     rowVirtualizer.value.measureElement(el as Element)
   }
 }
-
-// 统一的渲染行列表:虚拟化开启时只取窗口内的行(需 measure 交给虚拟器测量),
-// 关闭时取全部行(无需测量)。模板据此渲染,两种模式共用同一套单元格结构。
-const renderRows = computed<Array<{ index: number; row: any; measure: boolean }>>(() => {
-  const data = sortedData.value ?? []
-  if (shouldVirtualize.value) {
-    return virtualItems.value.map(vr => ({ index: vr.index, row: data[vr.index], measure: true }))
-  }
-  return data.map((row, index) => ({ index, row, measure: false }))
-})
 
 const hasActionsColumn = computed(() => {
   return props.columns.some(column => column.key === 'actions')
@@ -786,7 +719,6 @@ watch(
 
 defineExpose({
   virtualizer: rowVirtualizer,
-  shouldVirtualize,
   sortedData,
   resolveRowKey,
   tableWrapperEl: tableWrapperRef,

@@ -318,7 +318,6 @@ import {
 } from '@/api/auth'
 import { buildAuthErrorMessage } from '@/utils/authError'
 import {
-  formatRegistrationEmailSuffixWhitelistForMessage,
   isRegistrationEmailSuffixAllowed,
   normalizeRegistrationEmailSuffixWhitelist
 } from '@/utils/registrationEmailPolicy'
@@ -353,7 +352,12 @@ const promoCodeEnabled = ref<boolean>(true)
 const invitationCodeEnabled = ref<boolean>(false)
 const turnstileEnabled = ref<boolean>(false)
 const turnstileSiteKey = ref<string>('')
-const siteName = ref<string>('Sub2API')
+const normalizeBrandName = (name: string) => {
+  const trimmed = name.trim()
+  if (!trimmed || trimmed === 'Sub2API') return 'NavtoAI API'
+  return trimmed.toLowerCase() === 'navtoai api' ? 'NavtoAI API' : trimmed
+}
+const siteName = ref<string>('NavtoAI API')
 const linuxdoOAuthEnabled = ref<boolean>(false)
 const wechatOAuthEnabled = ref<boolean>(false)
 const oidcOAuthEnabled = ref<boolean>(false)
@@ -461,7 +465,7 @@ onMounted(async () => {
     invitationCodeEnabled.value = settings.invitation_code_enabled
     turnstileEnabled.value = settings.turnstile_enabled
     turnstileSiteKey.value = settings.turnstile_site_key || ''
-    siteName.value = settings.site_name || 'Sub2API'
+    siteName.value = normalizeBrandName(settings.site_name || 'NavtoAI API')
     linuxdoOAuthEnabled.value = settings.linuxdo_oauth_enabled
     wechatOAuthEnabled.value = isWeChatWebOAuthEnabled(settings)
     oidcOAuthEnabled.value = settings.oidc_oauth_enabled
@@ -740,10 +744,7 @@ function buildEmailSuffixNotAllowedMessage(): string {
   }
   const separator = String(locale.value || '').toLowerCase().startsWith('zh') ? '、' : ', '
   return t('auth.emailSuffixNotAllowedWithAllowed', {
-    suffixes: formatRegistrationEmailSuffixWhitelistForMessage(normalizedWhitelist, {
-      separator,
-      more: (count) => t('auth.emailSuffixAllowedMore', { count })
-    })
+    suffixes: normalizedWhitelist.join(separator)
   })
 }
 
