@@ -311,7 +311,7 @@ appStore.showError('Username already exists')
 
 Potential improvements:
 
-- OAuth/SSO integration (Google, GitHub)
+- OAuth/SSO integration (Google, code hosting providers)
 - Two-factor authentication (2FA)
 - Password strength meter
 - Email verification flow

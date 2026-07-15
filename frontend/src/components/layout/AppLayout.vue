@@ -1,7 +1,7 @@
 <template>
-  <div class="min-h-screen bg-gray-50 dark:bg-dark-950">
+  <div class="app-shell min-h-screen">
     <!-- Background Decoration -->
-    <div class="pointer-events-none fixed inset-0 bg-mesh-gradient"></div>
+    <div class="app-grid-bg pointer-events-none fixed inset-0"></div>
 
     <!-- Sidebar -->
     <AppSidebar />
@@ -15,7 +15,7 @@
       <AppHeader />
 
       <!-- Main Content -->
-      <main class="p-4 md:p-6 lg:p-8">
+      <main class="app-main p-4 md:p-6 lg:p-8">
         <slot />
       </main>
     </div>
@@ -50,3 +50,36 @@ onMounted(() => {
 
 defineExpose({ replayTour })
 </script>
+
+<style scoped>
+.app-shell {
+  color: #09111f;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(245, 247, 251, 0.96)),
+    #f5f7fb;
+}
+
+.app-grid-bg {
+  background:
+    repeating-linear-gradient(90deg, rgba(15, 23, 42, 0.035) 0 1px, transparent 1px 88px),
+    repeating-linear-gradient(180deg, rgba(15, 23, 42, 0.028) 0 1px, transparent 1px 88px);
+}
+
+.app-main {
+  position: relative;
+  z-index: 1;
+}
+
+:global(.dark) .app-shell {
+  color: #f8fafc;
+  background:
+    linear-gradient(180deg, rgba(15, 23, 42, 0.58), rgba(2, 6, 23, 0.96)),
+    #020617;
+}
+
+:global(.dark) .app-grid-bg {
+  background:
+    repeating-linear-gradient(90deg, rgba(148, 163, 184, 0.055) 0 1px, transparent 1px 88px),
+    repeating-linear-gradient(180deg, rgba(148, 163, 184, 0.045) 0 1px, transparent 1px 88px);
+}
+</style>

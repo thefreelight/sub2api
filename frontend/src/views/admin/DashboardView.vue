@@ -1,304 +1,109 @@
 <template>
   <AppLayout>
-    <div class="space-y-6">
+    <div class="admin-dashboard">
       <!-- Loading State -->
-      <div v-if="loading" class="flex items-center justify-center py-12">
+      <div v-if="loading" class="dashboard-loading">
         <LoadingSpinner />
       </div>
 
       <template v-else-if="stats">
-        <!-- Row 1: Core Stats -->
-        <div class="grid grid-cols-2 gap-4 lg:grid-cols-4">
-          <!-- Total API Keys -->
-          <div class="card p-4">
-            <div class="flex items-center gap-3">
-              <div class="rounded-lg bg-blue-100 p-2 dark:bg-blue-900/30">
-                <Icon name="key" size="md" class="text-blue-600 dark:text-blue-400" :stroke-width="2" />
-              </div>
-              <div>
-                <p class="text-xs font-medium text-gray-500 dark:text-gray-400">
-                  {{ t('admin.dashboard.apiKeys') }}
-                </p>
-                <p class="text-xl font-bold text-gray-900 dark:text-white">
-                  {{ stats.total_api_keys }}
-                </p>
-                <p class="text-xs text-green-600 dark:text-green-400">
-                  {{ stats.active_api_keys }} {{ t('common.active') }}
-                </p>
-              </div>
+        <section class="dashboard-hero">
+          <div class="hero-brand">
+            <div class="hero-logo">
+              <img v-if="siteLogo" :src="siteLogo" :alt="`${brandName} logo`" />
+              <span v-else class="hero-glyph" aria-hidden="true"></span>
+            </div>
+            <div class="min-w-0">
+              <p class="eyebrow">{{ dashboardCopy.eyebrow }}</p>
+              <h1>{{ brandName }} {{ dashboardCopy.title }}</h1>
+              <p>{{ dashboardCopy.description }}</p>
             </div>
           </div>
 
-          <!-- Service Accounts -->
-          <div class="card p-4">
-            <div class="flex items-center gap-3">
-              <div class="rounded-lg bg-purple-100 p-2 dark:bg-purple-900/30">
-                <Icon name="server" size="md" class="text-purple-600 dark:text-purple-400" :stroke-width="2" />
-              </div>
-              <div>
-                <p class="text-xs font-medium text-gray-500 dark:text-gray-400">
-                  {{ t('admin.dashboard.accounts') }}
-                </p>
-                <p class="text-xl font-bold text-gray-900 dark:text-white">
-                  {{ stats.total_accounts }}
-                </p>
-                <p class="text-xs">
-                  <span class="text-green-600 dark:text-green-400"
-                    >{{ stats.normal_accounts }} {{ t('common.active') }}</span
-                  >
-                  <span v-if="stats.error_accounts > 0" class="ml-1 text-red-500"
-                    >{{ stats.error_accounts }} {{ t('common.error') }}</span
-                  >
-                </p>
-              </div>
+          <div class="hero-kpis">
+            <div>
+              <span>{{ dashboardCopy.activeUsers }}</span>
+              <strong>{{ formatNumber(stats.active_users) }}</strong>
+            </div>
+            <div>
+              <span>RPM</span>
+              <strong>{{ formatTokens(stats.rpm) }}</strong>
+            </div>
+            <div>
+              <span>TPM</span>
+              <strong>{{ formatTokens(stats.tpm) }}</strong>
             </div>
           </div>
+        </section>
 
-          <!-- Today Requests -->
-          <div class="card p-4">
-            <div class="flex items-center gap-3">
-              <div class="rounded-lg bg-green-100 p-2 dark:bg-green-900/30">
-                <Icon name="chart" size="md" class="text-green-600 dark:text-green-400" :stroke-width="2" />
-              </div>
-              <div>
-                <p class="text-xs font-medium text-gray-500 dark:text-gray-400">
-                  {{ t('admin.dashboard.todayRequests') }}
-                </p>
-                <p class="text-xl font-bold text-gray-900 dark:text-white">
-                  {{ stats.today_requests }}
-                </p>
-                <p class="text-xs text-gray-500 dark:text-gray-400">
-                  {{ t('common.total') }}: {{ formatNumber(stats.total_requests) }}
-                </p>
-              </div>
+        <section class="metric-grid">
+          <article
+            v-for="card in coreCards"
+            :key="card.key"
+            class="metric-card"
+            :class="`metric-card-${card.tone}`"
+          >
+            <span class="metric-icon">
+              <Icon :name="card.icon" size="md" :stroke-width="2" />
+            </span>
+            <div>
+              <p>{{ card.label }}</p>
+              <strong>{{ card.value }}</strong>
+              <span>{{ card.detail }}</span>
             </div>
-          </div>
+          </article>
+        </section>
 
-          <!-- New Users Today -->
-          <div class="card p-4">
-            <div class="flex items-center gap-3">
-              <div class="rounded-lg bg-emerald-100 p-2 dark:bg-emerald-900/30">
-                <Icon name="userPlus" size="md" class="text-emerald-600 dark:text-emerald-400" :stroke-width="2" />
-              </div>
-              <div>
-                <p class="text-xs font-medium text-gray-500 dark:text-gray-400">
-                  {{ t('admin.dashboard.users') }}
-                </p>
-                <p class="text-xl font-bold text-emerald-600 dark:text-emerald-400">
-                  +{{ stats.today_new_users }}
-                </p>
-                <p class="text-xs text-gray-500 dark:text-gray-400">
-                  {{ t('common.total') }}: {{ formatNumber(stats.total_users) }}
-                </p>
-              </div>
+        <section class="metric-grid">
+          <article
+            v-for="card in tokenCards"
+            :key="card.key"
+            class="metric-card metric-card-wide"
+            :class="`metric-card-${card.tone}`"
+          >
+            <span class="metric-icon">
+              <Icon :name="card.icon" size="md" :stroke-width="2" />
+            </span>
+            <div>
+              <p>{{ card.label }}</p>
+              <strong>{{ card.value }}</strong>
+              <span>{{ card.detail }}</span>
             </div>
-          </div>
-        </div>
-
-        <!-- Row 2: Token Stats -->
-        <div class="grid grid-cols-2 gap-4 lg:grid-cols-4">
-          <!-- Today Tokens -->
-          <div class="card p-4">
-            <div class="flex items-center gap-3">
-              <div class="rounded-lg bg-amber-100 p-2 dark:bg-amber-900/30">
-                <Icon name="cube" size="md" class="text-amber-600 dark:text-amber-400" :stroke-width="2" />
-              </div>
-              <div>
-                <p class="text-xs font-medium text-gray-500 dark:text-gray-400">
-                  {{ t('admin.dashboard.todayTokens') }}
-                </p>
-                <p class="text-xl font-bold text-gray-900 dark:text-white">
-                  {{ formatTokens(stats.today_tokens) }}
-                </p>
-                <p class="text-xs">
-                  <span
-                    class="text-green-600 dark:text-green-400"
-                    :title="t('admin.dashboard.actual')"
-                    >${{ formatCost(stats.today_actual_cost) }}</span
-                  >
-                  <span class="text-gray-400 dark:text-gray-500"> / </span>
-                  <span
-                    class="text-orange-500 dark:text-orange-400"
-                    :title="t('admin.dashboard.accountCost')"
-                    >${{ formatCost(stats.today_account_cost) }}</span
-                  >
-                  <span class="text-gray-400 dark:text-gray-500"> / </span>
-                  <span
-                    class="text-gray-400 dark:text-gray-500"
-                    :title="t('admin.dashboard.standard')"
-                    >${{ formatCost(stats.today_cost) }}</span
-                  >
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <!-- Total Tokens -->
-          <div class="card p-4">
-            <div class="flex items-center gap-3">
-              <div class="rounded-lg bg-indigo-100 p-2 dark:bg-indigo-900/30">
-                <Icon name="database" size="md" class="text-indigo-600 dark:text-indigo-400" :stroke-width="2" />
-              </div>
-              <div>
-                <p class="text-xs font-medium text-gray-500 dark:text-gray-400">
-                  {{ t('admin.dashboard.totalTokens') }}
-                </p>
-                <p class="text-xl font-bold text-gray-900 dark:text-white">
-                  {{ formatTokens(stats.total_tokens) }}
-                </p>
-                <p class="text-xs">
-                  <span
-                    class="text-green-600 dark:text-green-400"
-                    :title="t('admin.dashboard.actual')"
-                    >${{ formatCost(stats.total_actual_cost) }}</span
-                  >
-                  <span class="text-gray-400 dark:text-gray-500"> / </span>
-                  <span
-                    class="text-orange-500 dark:text-orange-400"
-                    :title="t('admin.dashboard.accountCost')"
-                    >${{ formatCost(stats.total_account_cost) }}</span
-                  >
-                  <span class="text-gray-400 dark:text-gray-500"> / </span>
-                  <span
-                    class="text-gray-400 dark:text-gray-500"
-                    :title="t('admin.dashboard.standard')"
-                    >${{ formatCost(stats.total_cost) }}</span
-                  >
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <!-- Performance (RPM/TPM) -->
-          <div class="card p-4">
-            <div class="flex items-center gap-3">
-              <div class="rounded-lg bg-violet-100 p-2 dark:bg-violet-900/30">
-                <Icon name="bolt" size="md" class="text-violet-600 dark:text-violet-400" :stroke-width="2" />
-              </div>
-              <div class="flex-1">
-                <p class="text-xs font-medium text-gray-500 dark:text-gray-400">
-                  {{ t('admin.dashboard.performance') }}
-                </p>
-                <div class="flex items-baseline gap-2">
-                  <p class="text-xl font-bold text-gray-900 dark:text-white">
-                    {{ formatTokens(stats.rpm) }}
-                  </p>
-                  <span class="text-xs text-gray-500 dark:text-gray-400">RPM</span>
-                </div>
-                <div class="flex items-baseline gap-2">
-                  <p class="text-sm font-semibold text-violet-600 dark:text-violet-400">
-                    {{ formatTokens(stats.tpm) }}
-                  </p>
-                  <span class="text-xs text-gray-500 dark:text-gray-400">TPM</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Avg Response Time -->
-          <div class="card p-4">
-            <div class="flex items-center gap-3">
-              <div class="rounded-lg bg-rose-100 p-2 dark:bg-rose-900/30">
-                <Icon name="clock" size="md" class="text-rose-600 dark:text-rose-400" :stroke-width="2" />
-              </div>
-              <div>
-                <p class="text-xs font-medium text-gray-500 dark:text-gray-400">
-                  {{ t('admin.dashboard.avgResponse') }}
-                </p>
-                <p class="text-xl font-bold text-gray-900 dark:text-white">
-                  {{ formatDuration(stats.average_duration_ms) }}
-                </p>
-                <p class="text-xs text-gray-500 dark:text-gray-400">
-                  {{ stats.active_users }} {{ t('admin.dashboard.activeUsers') }}
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Quick Actions -->
-        <div class="card p-4">
-          <div class="mb-3 flex items-center justify-between">
-            <h2 class="text-sm font-semibold text-gray-900 dark:text-white">
-              {{ t('admin.dashboard.quickActions') }}
-            </h2>
-          </div>
-          <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
-            <button
-              v-if="canUseBatchImage"
-              type="button"
-              class="group flex items-center gap-3 rounded-lg bg-gray-50 p-3 text-left transition-colors hover:bg-sky-50 dark:bg-dark-800/50 dark:hover:bg-sky-900/20"
-              @click="router.push('/batch-image')"
-            >
-              <span class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-sky-100 text-sky-600 dark:bg-sky-900/30 dark:text-sky-400">
-                <Icon name="sparkles" size="md" :stroke-width="2" />
-              </span>
-              <span class="min-w-0 flex-1">
-                <span class="block text-sm font-medium text-gray-900 dark:text-white">
-                  {{ t('admin.dashboard.batchImage') }}
-                </span>
-                <span class="block text-xs text-gray-500 dark:text-gray-400">
-                  {{ t('admin.dashboard.batchImageDesc') }}
-                </span>
-              </span>
-              <Icon name="chevronRight" size="sm" class="text-gray-400 group-hover:text-sky-500" />
-            </button>
-            <button
-              type="button"
-              class="group flex items-center gap-3 rounded-lg bg-gray-50 p-3 text-left transition-colors hover:bg-emerald-50 dark:bg-dark-800/50 dark:hover:bg-emerald-900/20"
-              @click="router.push('/admin/groups')"
-            >
-              <span class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400">
-                <Icon name="grid" size="md" :stroke-width="2" />
-              </span>
-              <span class="min-w-0 flex-1">
-                <span class="block text-sm font-medium text-gray-900 dark:text-white">
-                  {{ t('admin.dashboard.groupPricing') }}
-                </span>
-                <span class="block text-xs text-gray-500 dark:text-gray-400">
-                  {{ t('admin.dashboard.groupPricingDesc') }}
-                </span>
-              </span>
-              <Icon name="chevronRight" size="sm" class="text-gray-400 group-hover:text-emerald-500" />
-            </button>
-          </div>
-        </div>
+          </article>
+        </section>
 
         <!-- Charts Section -->
-        <div class="space-y-6">
+        <div class="dashboard-section">
           <!-- Date Range Filter -->
-          <div class="card p-4">
-            <div class="flex flex-wrap items-center gap-4">
-              <div class="flex items-center gap-2">
-                <span class="text-sm font-medium text-gray-700 dark:text-gray-300"
-                  >{{ t('admin.dashboard.timeRange') }}:</span
-                >
+          <div class="dashboard-panel dashboard-toolbar">
+            <div class="toolbar-left">
+              <div class="control-group">
+                <span>{{ t('admin.dashboard.timeRange') }}</span>
                 <DateRangePicker
                   v-model:start-date="startDate"
                   v-model:end-date="endDate"
                   @change="onDateRangeChange"
                 />
               </div>
-              <button @click="loadDashboardStats" :disabled="chartsLoading" class="btn btn-secondary">
+              <button @click="loadDashboardStats" :disabled="chartsLoading" class="toolbar-button">
+                <Icon name="refresh" size="sm" :stroke-width="2" :class="{ 'animate-spin': chartsLoading }" />
                 {{ t('common.refresh') }}
               </button>
-              <div class="ml-auto flex items-center gap-2">
-                <span class="text-sm font-medium text-gray-700 dark:text-gray-300"
-                  >{{ t('admin.dashboard.granularity') }}:</span
-                >
-                <div class="w-28">
-                  <Select
-                    v-model="granularity"
-                    :options="granularityOptions"
-                    @change="loadChartData"
-                  />
-                </div>
+            </div>
+            <div class="control-group">
+              <span>{{ t('admin.dashboard.granularity') }}</span>
+              <div class="w-28">
+                <Select
+                  v-model="granularity"
+                  :options="granularityOptions"
+                  @change="loadChartData"
+                />
               </div>
             </div>
           </div>
 
           <!-- Charts Grid -->
-          <div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          <div class="chart-grid">
             <ModelDistributionChart
               :model-stats="modelStats"
               :enable-ranking-view="true"
@@ -317,9 +122,9 @@
           </div>
 
           <!-- User Usage Trend (Full Width) -->
-          <div class="card p-4">
-            <h3 class="mb-4 text-sm font-semibold text-gray-900 dark:text-white">
-              {{ t('admin.dashboard.recentUsage') }} (Top 12)
+          <div class="dashboard-panel trend-panel">
+            <h3>
+              {{ t('admin.dashboard.recentUsage') }} <span>Top 12</span>
             </h3>
             <div class="h-64">
               <div v-if="userTrendLoading" class="flex h-full items-center justify-center">
@@ -345,8 +150,6 @@ import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { useAppStore } from '@/stores/app'
-
-const { t } = useI18n()
 import { adminAPI } from '@/api/admin'
 import type {
   DashboardStats,
@@ -362,7 +165,6 @@ import DateRangePicker from '@/components/common/DateRangePicker.vue'
 import Select from '@/components/common/Select.vue'
 import ModelDistributionChart from '@/components/charts/ModelDistributionChart.vue'
 import TokenUsageTrend from '@/components/charts/TokenUsageTrend.vue'
-import { useBatchImageAccess } from '@/composables/useBatchImageAccess'
 
 import {
   Chart as ChartJS,
@@ -375,6 +177,8 @@ import {
   Filler
 } from 'chart.js'
 import { Line } from 'vue-chartjs'
+
+const { t, locale } = useI18n()
 
 // Register Chart.js components
 ChartJS.register(
@@ -389,7 +193,6 @@ ChartJS.register(
 
 const appStore = useAppStore()
 const router = useRouter()
-const { canUseBatchImage, refreshBatchImageAccess } = useBatchImageAccess()
 const stats = ref<DashboardStats | null>(null)
 const loading = ref(false)
 const chartsLoading = ref(false)
@@ -409,6 +212,51 @@ let chartLoadSeq = 0
 let usersTrendLoadSeq = 0
 let rankingLoadSeq = 0
 const rankingLimit = 12
+type MetricIcon = 'key' | 'server' | 'chart' | 'userPlus' | 'cube' | 'database' | 'bolt' | 'clock'
+type MetricTone = 'violet' | 'teal' | 'green' | 'amber' | 'slate' | 'rose'
+type MetricCard = {
+  key: string
+  icon: MetricIcon
+  tone: MetricTone
+  label: string
+  value: string
+  detail: string
+}
+
+const isZh = computed(() => locale.value.startsWith('zh'))
+const brandName = computed(() => {
+  const configured = appStore.siteName?.trim()
+  if (!configured || configured === 'Sub2API') return 'NavtoAI API'
+  return configured.toLowerCase() === 'navtoai api' ? 'NavtoAI API' : configured
+})
+const siteLogo = computed(() => appStore.siteLogo || '')
+const dashboardCopy = computed(() => isZh.value
+  ? {
+      eyebrow: '后台控制台',
+      title: '运行概览',
+      description: '集中查看密钥、账号池、请求量、成本和模型分布，快速判断服务是否健康。',
+      activeUsers: '活跃用户',
+      healthyAccounts: '正常',
+      errorAccounts: '异常',
+      total: '累计',
+      today: '今日',
+      costBreakdown: '实际 / 成本 / 标准',
+      response: '平均响应',
+      activeApiKeys: '可用密钥'
+    }
+  : {
+      eyebrow: 'Admin Console',
+      title: 'Operations Overview',
+      description: 'Track keys, account pools, request volume, cost and model distribution from one focused view.',
+      activeUsers: 'Active users',
+      healthyAccounts: 'Healthy',
+      errorAccounts: 'Errors',
+      total: 'Total',
+      today: 'Today',
+      costBreakdown: 'Actual / Account / Standard',
+      response: 'Average response',
+      activeApiKeys: 'Active keys'
+    })
 
 // Helper function to format date in local timezone
 const formatLocalDate = (date: Date): string => {
@@ -604,12 +452,93 @@ const formatCost = (value: number | null | undefined): string => {
   return safeValue.toFixed(4)
 }
 
-const formatDuration = (ms: number): string => {
-  if (ms >= 1000) {
-    return `${(ms / 1000).toFixed(2)}s`
+const formatDuration = (ms: number | undefined | null): string => {
+  const duration = ms ?? 0
+  if (duration >= 1000) {
+    return `${(duration / 1000).toFixed(2)}s`
   }
-  return `${Math.round(ms)}ms`
+  return `${Math.round(duration)}ms`
 }
+
+const costBreakdown = (actual: number | undefined, account: number | undefined, standard: number | undefined): string => {
+  return `${dashboardCopy.value.costBreakdown}: $${formatCost(actual)} / $${formatCost(account)} / $${formatCost(standard)}`
+}
+
+const coreCards = computed<MetricCard[]>(() => {
+  if (!stats.value) return []
+  return [
+    {
+      key: 'apiKeys',
+      icon: 'key',
+      tone: 'violet',
+      label: t('admin.dashboard.apiKeys'),
+      value: formatNumber(stats.value.total_api_keys),
+      detail: `${stats.value.active_api_keys} ${dashboardCopy.value.activeApiKeys}`
+    },
+    {
+      key: 'accounts',
+      icon: 'server',
+      tone: 'teal',
+      label: t('admin.dashboard.accounts'),
+      value: formatNumber(stats.value.total_accounts),
+      detail: `${stats.value.normal_accounts} ${dashboardCopy.value.healthyAccounts}${stats.value.error_accounts > 0 ? ` / ${stats.value.error_accounts} ${dashboardCopy.value.errorAccounts}` : ''}`
+    },
+    {
+      key: 'requests',
+      icon: 'chart',
+      tone: 'green',
+      label: t('admin.dashboard.todayRequests'),
+      value: formatNumber(stats.value.today_requests),
+      detail: `${dashboardCopy.value.total}: ${formatNumber(stats.value.total_requests)}`
+    },
+    {
+      key: 'users',
+      icon: 'userPlus',
+      tone: 'amber',
+      label: t('admin.dashboard.users'),
+      value: `+${formatNumber(stats.value.today_new_users)}`,
+      detail: `${dashboardCopy.value.total}: ${formatNumber(stats.value.total_users)}`
+    }
+  ]
+})
+
+const tokenCards = computed<MetricCard[]>(() => {
+  if (!stats.value) return []
+  return [
+    {
+      key: 'todayTokens',
+      icon: 'cube',
+      tone: 'amber',
+      label: t('admin.dashboard.todayTokens'),
+      value: formatTokens(stats.value.today_tokens),
+      detail: costBreakdown(stats.value.today_actual_cost, stats.value.today_account_cost, stats.value.today_cost)
+    },
+    {
+      key: 'totalTokens',
+      icon: 'database',
+      tone: 'slate',
+      label: t('admin.dashboard.totalTokens'),
+      value: formatTokens(stats.value.total_tokens),
+      detail: costBreakdown(stats.value.total_actual_cost, stats.value.total_account_cost, stats.value.total_cost)
+    },
+    {
+      key: 'performance',
+      icon: 'bolt',
+      tone: 'violet',
+      label: t('admin.dashboard.performance'),
+      value: `${formatTokens(stats.value.rpm)} RPM`,
+      detail: `${formatTokens(stats.value.tpm)} TPM`
+    },
+    {
+      key: 'response',
+      icon: 'clock',
+      tone: 'rose',
+      label: dashboardCopy.value.response,
+      value: formatDuration(stats.value.average_duration_ms),
+      detail: `${stats.value.active_users} ${t('admin.dashboard.activeUsers')}`
+    }
+  ]
+})
 
 const goToUserUsage = (item: UserSpendingRankingItem) => {
   void router.push({
@@ -749,10 +678,373 @@ const loadChartData = async () => {
 }
 
 onMounted(() => {
-  void refreshBatchImageAccess()
   loadDashboardStats()
 })
 </script>
 
 <style scoped>
+.admin-dashboard {
+  display: grid;
+  gap: 24px;
+}
+
+.dashboard-loading {
+  display: grid;
+  min-height: 320px;
+  place-items: center;
+}
+
+.dashboard-hero,
+.metric-card,
+.dashboard-panel {
+  border: 1px solid rgba(85, 98, 119, 0.18);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.08);
+  backdrop-filter: blur(18px);
+}
+
+.dashboard-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 28px;
+  padding: 28px;
+}
+
+.hero-brand {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 20px;
+}
+
+.hero-logo {
+  display: grid;
+  width: 64px;
+  height: 64px;
+  flex: 0 0 auto;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid rgba(85, 98, 119, 0.16);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 18px 42px rgba(15, 23, 42, 0.1);
+}
+
+.hero-logo img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.hero-glyph {
+  position: relative;
+  display: block;
+  width: 40px;
+  height: 40px;
+  transform: rotate(30deg);
+  border-radius: 10px;
+  background: linear-gradient(135deg, #7467ff, #9d93ff);
+}
+
+.hero-glyph::after {
+  position: absolute;
+  inset: 11px;
+  content: '';
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.7);
+}
+
+.eyebrow {
+  display: inline-flex;
+  margin-bottom: 10px;
+  border: 1px solid rgba(109, 93, 252, 0.18);
+  border-radius: 8px;
+  background: rgba(109, 93, 252, 0.09);
+  padding: 5px 9px;
+  color: #5d50db;
+  font-size: 12px;
+  font-weight: 760;
+}
+
+.dashboard-hero h1 {
+  color: #09111f;
+  font-size: 30px;
+  font-weight: 800;
+  line-height: 1.12;
+}
+
+.dashboard-hero p:not(.eyebrow) {
+  margin-top: 8px;
+  max-width: 760px;
+  color: #607086;
+  line-height: 1.68;
+}
+
+.hero-kpis {
+  display: grid;
+  min-width: 300px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  overflow: hidden;
+  border: 1px solid rgba(85, 98, 119, 0.14);
+  border-radius: 8px;
+  background: rgba(248, 250, 252, 0.82);
+}
+
+.hero-kpis div {
+  padding: 16px 18px;
+  border-right: 1px solid rgba(85, 98, 119, 0.12);
+}
+
+.hero-kpis div:last-child {
+  border-right: 0;
+}
+
+.hero-kpis span,
+.metric-card p,
+.metric-card span,
+.control-group span {
+  color: #607086;
+  font-size: 12px;
+  font-weight: 720;
+}
+
+.hero-kpis strong {
+  display: block;
+  margin-top: 6px;
+  color: #09111f;
+  font-size: 18px;
+  font-weight: 820;
+}
+
+.metric-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.metric-card {
+  display: flex;
+  min-width: 0;
+  min-height: 132px;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 20px;
+}
+
+.metric-icon {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 8px;
+}
+
+.metric-card strong {
+  display: block;
+  margin-top: 8px;
+  color: #09111f;
+  font-size: 24px;
+  font-weight: 820;
+  line-height: 1.1;
+}
+
+.metric-card span:not(.metric-icon) {
+  display: block;
+  margin-top: 8px;
+  overflow-wrap: anywhere;
+  line-height: 1.45;
+}
+
+.metric-card-violet .metric-icon {
+  background: rgba(109, 93, 252, 0.1);
+  color: #5d50db;
+}
+
+.metric-card-teal .metric-icon {
+  background: rgba(20, 184, 166, 0.1);
+  color: #0f9488;
+}
+
+.metric-card-green .metric-icon {
+  background: rgba(34, 197, 94, 0.1);
+  color: #168a46;
+}
+
+.metric-card-amber .metric-icon {
+  background: rgba(245, 158, 11, 0.12);
+  color: #b36a03;
+}
+
+.metric-card-slate .metric-icon {
+  background: rgba(71, 85, 105, 0.1);
+  color: #475569;
+}
+
+.metric-card-rose .metric-icon {
+  background: rgba(244, 63, 94, 0.1);
+  color: #be123c;
+}
+
+.dashboard-section {
+  display: grid;
+  gap: 20px;
+}
+
+.dashboard-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px;
+}
+
+.toolbar-left,
+.control-group,
+.toolbar-button {
+  display: flex;
+  align-items: center;
+}
+
+.toolbar-left {
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.control-group {
+  gap: 10px;
+}
+
+.toolbar-button {
+  min-height: 38px;
+  gap: 8px;
+  border: 1px solid rgba(85, 98, 119, 0.18);
+  border-radius: 8px;
+  background: #07111f;
+  padding: 0 14px;
+  color: #f8fafc;
+  font-size: 13px;
+  font-weight: 760;
+  transition: transform 180ms ease, background 180ms ease;
+}
+
+.toolbar-button:hover:not(:disabled) {
+  transform: translateY(-1px);
+  background: #111c2d;
+}
+
+.toolbar-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+.chart-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+}
+
+.trend-panel {
+  padding: 20px;
+}
+
+.trend-panel h3 {
+  margin-bottom: 16px;
+  color: #09111f;
+  font-size: 15px;
+  font-weight: 780;
+}
+
+.trend-panel h3 span {
+  color: #94a3b8;
+  font-weight: 700;
+}
+
+:global(.dark) .dashboard-hero,
+:global(.dark) .metric-card,
+:global(.dark) .dashboard-panel {
+  border-color: rgba(148, 163, 184, 0.16);
+  background: rgba(15, 23, 42, 0.82);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.2);
+}
+
+:global(.dark) .hero-logo,
+:global(.dark) .hero-kpis {
+  border-color: rgba(148, 163, 184, 0.16);
+  background: rgba(15, 23, 42, 0.72);
+}
+
+:global(.dark) .hero-kpis div {
+  border-right-color: rgba(148, 163, 184, 0.14);
+}
+
+:global(.dark) .dashboard-hero h1,
+:global(.dark) .hero-kpis strong,
+:global(.dark) .metric-card strong,
+:global(.dark) .trend-panel h3 {
+  color: #f8fafc;
+}
+
+:global(.dark) .dashboard-hero p:not(.eyebrow),
+:global(.dark) .hero-kpis span,
+:global(.dark) .metric-card p,
+:global(.dark) .metric-card span,
+:global(.dark) .control-group span {
+  color: #94a3b8;
+}
+
+@media (max-width: 1180px) {
+  .dashboard-hero {
+    grid-template-columns: 1fr;
+  }
+
+  .hero-kpis {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .metric-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 900px) {
+  .chart-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .dashboard-hero {
+    padding: 20px;
+  }
+
+  .hero-brand {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .hero-kpis,
+  .metric-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .toolbar-left,
+  .control-group {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .toolbar-button {
+    justify-content: center;
+  }
+}
 </style>

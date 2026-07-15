@@ -526,20 +526,33 @@
   /* ============ 侧边栏 ============ */
   .sidebar {
     @apply fixed inset-y-0 left-0 z-40;
-    @apply w-64 bg-white dark:bg-dark-900;
-    @apply border-r border-gray-200 dark:border-dark-800;
+    @apply w-64;
     @apply flex flex-col;
     @apply transition-transform duration-300;
+    background: rgba(255, 255, 255, 0.92);
+    border-right: 1px solid rgba(85, 98, 119, 0.16);
+    box-shadow: 20px 0 60px rgba(15, 23, 42, 0.06);
+    backdrop-filter: blur(18px);
     transition-property: width, transform;
+  }
+
+  .dark .sidebar {
+    background: rgba(15, 23, 42, 0.86);
+    border-right-color: rgba(148, 163, 184, 0.16);
+    box-shadow: 20px 0 60px rgba(0, 0, 0, 0.18);
   }
 
   .sidebar-header {
     @apply h-16 px-6;
     @apply flex items-center gap-3;
-    @apply border-b border-gray-100 dark:border-dark-800;
+    border-bottom: 1px solid rgba(85, 98, 119, 0.12);
     transition:
       padding 0.2s ease,
       gap 0.2s ease;
+  }
+
+  .dark .sidebar-header {
+    border-bottom-color: rgba(148, 163, 184, 0.14);
   }
 
   .sidebar-nav {
@@ -547,21 +560,37 @@
   }
 
   .sidebar-link {
-    @apply flex items-center gap-3 rounded-xl py-2.5;
+    @apply flex items-center gap-3 py-2.5;
     @apply overflow-hidden;
     @apply text-sm font-medium;
     @apply text-gray-600 dark:text-dark-300;
     @apply transition-all duration-200;
-    @apply hover:bg-gray-100 dark:hover:bg-dark-800;
     @apply hover:text-gray-900 dark:hover:text-white;
+    border-radius: 8px;
     padding-left: 1.0625rem;
     padding-right: 0.875rem;
   }
 
+  .sidebar-link:hover {
+    background: rgba(15, 23, 42, 0.06);
+  }
+
+  .dark .sidebar-link:hover {
+    background: rgba(148, 163, 184, 0.1);
+  }
+
   .sidebar-link-active {
-    @apply bg-primary-50 dark:bg-primary-900/20;
-    @apply text-primary-600 dark:text-primary-400;
-    @apply hover:bg-primary-100 dark:hover:bg-primary-900/30;
+    background: rgba(109, 93, 252, 0.1);
+    color: #5d50db;
+  }
+
+  .dark .sidebar-link-active {
+    background: rgba(109, 93, 252, 0.18);
+    color: #c7d2fe;
+  }
+
+  .sidebar-link-active:hover {
+    background: rgba(109, 93, 252, 0.14);
   }
 
   .sidebar-section {
@@ -585,6 +614,77 @@
 
   .page-description {
     @apply mt-1 text-sm text-gray-500 dark:text-dark-400;
+  }
+
+  html.dark .app-shell {
+    color: #f8fafc;
+    background:
+      linear-gradient(180deg, rgba(15, 23, 42, 0.72), rgba(2, 6, 23, 0.98)),
+      #020617;
+  }
+
+  html.dark .app-grid-bg {
+    background:
+      repeating-linear-gradient(90deg, rgba(148, 163, 184, 0.055) 0 1px, transparent 1px 88px),
+      repeating-linear-gradient(180deg, rgba(148, 163, 184, 0.045) 0 1px, transparent 1px 88px);
+  }
+
+  html.dark .app-header {
+    border-bottom-color: rgba(148, 163, 184, 0.16);
+    background: rgba(15, 23, 42, 0.92);
+  }
+
+  .user-dashboard .card {
+    border: 1px solid rgba(85, 98, 119, 0.16) !important;
+    border-radius: 8px !important;
+    background: #ffffff !important;
+    box-shadow: 0 18px 44px rgba(15, 23, 42, 0.08) !important;
+  }
+
+  .user-dashboard .card .border-b {
+    border-bottom-color: rgba(85, 98, 119, 0.14) !important;
+  }
+
+  html.dark .user-dashboard .card {
+    border-color: rgba(148, 163, 184, 0.18) !important;
+    background: #0f172a !important;
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.24) !important;
+  }
+
+  html.dark .user-dashboard .card .border-b {
+    border-bottom-color: rgba(148, 163, 184, 0.16) !important;
+  }
+
+  html.dark .user-dashboard .card [class*='bg-gray-50'],
+  html.dark .user-dashboard .card [class*='dark:bg-dark-800'] {
+    background-color: #111c2d !important;
+  }
+
+  html.dark .user-dashboard .card [class*='hover:bg-gray-100']:hover,
+  html.dark .user-dashboard .card [class*='dark:hover:bg-dark-800']:hover {
+    background-color: #162235 !important;
+  }
+
+  html.dark .user-dashboard .card [class*='text-gray-900'],
+  html.dark .user-dashboard .card [class*='dark:text-white'] {
+    color: #f8fafc !important;
+  }
+
+  html.dark .user-dashboard .card [class*='text-gray-700'],
+  html.dark .user-dashboard .card [class*='text-gray-600'],
+  html.dark .user-dashboard .card [class*='dark:text-gray-300'] {
+    color: #cbd5e1 !important;
+  }
+
+  html.dark .user-dashboard .card [class*='text-gray-500'],
+  html.dark .user-dashboard .card [class*='text-gray-400'],
+  html.dark .user-dashboard .card [class*='dark:text-gray-400'],
+  html.dark .user-dashboard .card [class*='dark:text-dark-400'] {
+    color: #94a3b8 !important;
+  }
+
+  html.dark .user-dashboard .card table tr {
+    border-color: rgba(148, 163, 184, 0.14) !important;
   }
 
   /* ============ 空状态 ============ */

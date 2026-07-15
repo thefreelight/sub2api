@@ -14,8 +14,6 @@ export interface AdminUsageStatsResponse {
   total_input_tokens: number
   total_output_tokens: number
   total_cache_tokens: number
-  total_cache_creation_tokens: number
-  total_cache_read_tokens: number
   total_tokens: number
   total_cost: number
   total_actual_cost: number
@@ -29,7 +27,6 @@ export interface AdminUsageStatsResponse {
 export interface SimpleUser {
   id: number
   email: string
-  deleted: boolean
 }
 
 export interface SimpleApiKey {
@@ -127,7 +124,6 @@ export async function getStats(params: {
   start_date?: string
   end_date?: string
   timezone?: string
-  nocache?: number
 }): Promise<AdminUsageStatsResponse> {
   const { data } = await apiClient.get<AdminUsageStatsResponse>('/admin/usage/stats', {
     params

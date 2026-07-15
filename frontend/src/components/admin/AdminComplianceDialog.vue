@@ -5,7 +5,6 @@
     width="wide"
     :close-on-escape="false"
     :close-on-click-outside="false"
-    :show-close-button="false"
     :z-index="80"
     @close="noop"
   >
@@ -155,7 +154,7 @@ watch(visible, (isVisible) => {
 })
 
 function noop(): void {
-  // 强制确认弹窗不允许通过关闭按钮绕过。
+  // This dialog is intentionally blocking until the admin records the acknowledgement.
 }
 
 async function submit(): Promise<void> {
@@ -167,9 +166,13 @@ async function submit(): Promise<void> {
   try {
     const status = await complianceStore.accept(typedPhrase.value.trim())
     if (!status.required) {
+      appStore.clearAllToasts()
       appStore.showSuccess(t('adminCompliance.accepted'))
       typedPhrase.value = ''
       attemptedSubmit.value = false
+      if (window.location.pathname.startsWith('/admin')) {
+        window.location.reload()
+      }
     }
   } catch (error) {
     const message = (error as { message?: string })?.message || t('adminCompliance.acceptFailed')

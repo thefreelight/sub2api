@@ -308,11 +308,8 @@ describe('admin GroupsView column settings', () => {
     expect(localStorage.getItem('group-hidden-columns')).toBe(JSON.stringify(['usage']))
   })
 
-  it('skips usage and capacity fetches until consuming columns are shown', async () => {
-    localStorage.setItem(
-      'group-hidden-columns',
-      JSON.stringify(['billing_type', 'usage', 'capacity']),
-    )
+  it('skips hidden usage and capacity fetches until those columns are shown', async () => {
+    localStorage.setItem('group-hidden-columns', JSON.stringify(['usage', 'capacity']))
 
     const wrapper = await mountView()
 

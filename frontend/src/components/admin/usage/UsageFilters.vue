@@ -1,5 +1,5 @@
 <template>
-  <div :class="flat ? 'p-4 sm:p-6' : 'card p-6'">
+  <div class="card p-6">
     <!-- Toolbar: left filters (multi-line) + right actions -->
     <div class="flex flex-wrap items-end justify-between gap-4">
       <!-- Left: filters (allowed to wrap to multiple rows) -->
@@ -35,7 +35,7 @@
               @click="selectUser(u)"
               class="w-full px-4 py-2 text-left hover:bg-gray-100 dark:hover:bg-gray-700"
             >
-              <span>{{ u.email }}<span v-if="u.deleted" class="ml-1 text-xs text-gray-400">（{{ t('admin.usage.userDeletedBadge') }}）</span></span>
+              <span>{{ u.email }}</span>
               <span class="ml-2 text-xs text-gray-400">#{{ u.id }}</span>
             </button>
           </div>
@@ -81,7 +81,7 @@
         <!-- Model Filter -->
         <div class="w-full sm:w-auto sm:min-w-[220px]">
           <label class="input-label">{{ t('usage.model') }}</label>
-          <Select v-model="filters.model" :options="modelOptions" searchable @change="emitChange" />
+          <Select v-model="filters.model" :options="modelSelectOptions" searchable @change="emitChange" />
         </div>
 
         <!-- Account Filter -->
@@ -133,8 +133,8 @@
           <Select v-model="filters.billing_type" :options="billingTypeOptions" @change="emitChange" />
         </div>
 
-        <!-- Billing Mode Filter (usage only；用户排行的 user-breakdown 接口不支持该维度) -->
-        <div v-if="mode === 'usage'" class="w-full sm:w-auto sm:min-w-[200px]">
+        <!-- Billing Mode Filter (usage only) -->
+        <div v-if="mode !== 'errors'" class="w-full sm:w-auto sm:min-w-[200px]">
           <label class="input-label">{{ t('admin.usage.billingMode') }}</label>
           <Select v-model="filters.billing_mode" :options="billingModeOptions" @change="emitChange" />
         </div>
@@ -174,7 +174,7 @@
           {{ t('common.reset') }}
         </button>
         <slot name="after-reset" />
-        <template v-if="mode === 'usage'">
+        <template v-if="mode !== 'errors'">
           <button type="button" @click="$emit('cleanup')" class="btn btn-danger">
             {{ t('admin.usage.cleanup.button') }}
           </button>
@@ -188,7 +188,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, toRef, watch, computed } from 'vue'
+import { computed, ref, onMounted, onUnmounted, toRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { adminAPI } from '@/api/admin'
 import Select, { type SelectOption } from '@/components/common/Select.vue'
@@ -204,19 +204,13 @@ interface Props {
   endDate: string
   showActions?: boolean
   modelOptions?: string[]
-  /**
-   * errors 模式:隐藏用量专属字段/按钮,显示错误类型+状态码(错误请求 tab 用)
-   * ranking 模式:同 usage 但隐藏计费模式筛选与清理/导出按钮(用户排行 tab 用)
-   */
-  mode?: 'usage' | 'errors' | 'ranking'
-  /** 嵌入统一卡片内使用：去掉自身卡片外观 */
-  flat?: boolean
+  /** errors 模式:隐藏用量专属字段/按钮,显示错误类型+状态码(错误请求 tab 用) */
+  mode?: 'usage' | 'errors'
 }
 
 const props = withDefaults(defineProps<Props>(), {
   showActions: true,
-  mode: 'usage',
-  flat: false
+  mode: 'usage'
 })
 const emit = defineEmits([
   'update:modelValue',
@@ -253,18 +247,29 @@ const accountResults = ref<SimpleAccount[]>([])
 const showAccountDropdown = ref(false)
 let accountSearchTimeout: ReturnType<typeof setTimeout> | null = null
 
-const modelOptions = computed<SelectOption[]>(() => [
-  { value: null, label: t('admin.usage.allModels') },
-  ...(props.modelOptions ?? []).map((m) => ({ value: m, label: m })),
-])
+const loadedModelNames = ref<string[]>([])
+const modelSelectOptions = computed<SelectOption[]>(() => {
+  const names = new Set<string>()
+  props.modelOptions?.forEach((name) => {
+    if (name) names.add(name)
+  })
+  loadedModelNames.value.forEach((name) => {
+    if (name) names.add(name)
+  })
+  return [
+    { value: null, label: t('admin.usage.allModels') },
+    ...Array.from(names)
+      .sort()
+      .map((name) => ({ value: name, label: name }))
+  ]
+})
 const groupOptions = ref<SelectOption[]>([{ value: null, label: t('admin.usage.allGroups') }])
 
 const requestTypeOptions = ref<SelectOption[]>([
   { value: null, label: t('admin.usage.allTypes') },
   { value: 'ws_v2', label: t('usage.ws') },
   { value: 'stream', label: t('usage.stream') },
-  { value: 'sync', label: t('usage.sync') },
-  { value: 'cyber', label: t('usage.cyber') }
+  { value: 'sync', label: t('usage.sync') }
 ])
 
 const billingTypeOptions = ref<SelectOption[]>([
@@ -300,8 +305,7 @@ const billingModeOptions = ref<SelectOption[]>([
   { value: null, label: t('admin.usage.allBillingModes') },
   { value: 'token', label: t('admin.usage.billingModeToken') },
   { value: 'per_request', label: t('admin.usage.billingModePerRequest') },
-  { value: 'image', label: t('admin.usage.billingModeImage') },
-  { value: 'video', label: t('admin.usage.billingModeVideo') }
+  { value: 'image', label: t('admin.usage.billingModeImage') }
 ])
 
 const emitChange = () => emit('change')
@@ -314,8 +318,7 @@ const debounceUserSearch = () => {
       return
     }
     try {
-      const results = await adminAPI.usage.searchUsers(userKeyword.value)
-      userResults.value = results.sort((a, b) => Number(a.deleted) - Number(b.deleted))
+      userResults.value = await adminAPI.usage.searchUsers(userKeyword.value)
     } catch {
       userResults.value = []
     }
@@ -480,9 +483,22 @@ watch(
 
 onMounted(async () => {
   document.addEventListener('click', onDocumentClick)
+
   try {
-    const gs = await adminAPI.groups.list(1, 1000)
+    const [gs, ms] = await Promise.all([
+      adminAPI.groups.list(1, 1000),
+      adminAPI.dashboard.getModelStats({ start_date: props.startDate, end_date: props.endDate })
+    ])
+
     groupOptions.value.push(...gs.items.map((g: any) => ({ value: g.id, label: g.name })))
+
+    const uniqueModels = new Set<string>()
+    ms.models?.forEach((s: any) => {
+      if (s.model) {
+        uniqueModels.add(s.model)
+      }
+    })
+    loadedModelNames.value = Array.from(uniqueModels).sort()
   } catch {
     // Ignore filter option loading errors (page still usable)
   }
@@ -491,13 +507,4 @@ onMounted(async () => {
 onUnmounted(() => {
   document.removeEventListener('click', onDocumentClick)
 })
-
-// 供外部(如用户排行下钻)在程序化设置 user_id 后回显选中的用户邮箱
-const setUserKeyword = (email: string) => {
-  userKeyword.value = email
-  userResults.value = []
-  showUserDropdown.value = false
-}
-
-defineExpose({ setUserKeyword })
 </script>

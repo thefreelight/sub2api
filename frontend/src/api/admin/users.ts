@@ -60,7 +60,6 @@ export async function list(
     role?: 'admin' | 'user'
     search?: string
     group_name?: string         // fuzzy filter by allowed group name
-    api_key_group_id?: number   // filter users by the group their API keys are bound to
     attributes?: Record<number, string>  // attributeId -> value
     include_subscriptions?: boolean
     sort_by?: string
@@ -78,7 +77,6 @@ export async function list(
     role: filters?.role,
     search: filters?.search,
     group_name: filters?.group_name,
-    api_key_group_id: filters?.api_key_group_id,
     include_subscriptions: filters?.include_subscriptions,
     sort_by: filters?.sort_by,
     sort_order: filters?.sort_order
@@ -102,12 +100,10 @@ export async function list(
 /**
  * Get user by ID
  * @param id - User ID
- * @param includeDeleted - Whether to include soft-deleted users
  * @returns User details
  */
-export async function getById(id: number, includeDeleted = false): Promise<AdminUser> {
-  const url = includeDeleted ? `/admin/users/${id}?include_deleted=true` : `/admin/users/${id}`
-  const { data } = await apiClient.get<AdminUser>(url)
+export async function getById(id: number): Promise<AdminUser> {
+  const { data } = await apiClient.get<AdminUser>(`/admin/users/${id}`)
   return data
 }
 
@@ -119,12 +115,8 @@ export async function getById(id: number, includeDeleted = false): Promise<Admin
 export async function create(userData: {
   email: string
   password: string
-  username?: string
-  notes?: string
-  role?: 'admin' | 'user'
   balance?: number
   concurrency?: number
-  rpm_limit?: number
   allowed_groups?: number[] | null
 }): Promise<AdminUser> {
   const { data } = await apiClient.post<AdminUser>('/admin/users', userData)
@@ -390,10 +382,7 @@ export const usersAPI = {
   getUserUsageStats,
   getUserBalanceHistory,
   replaceGroup,
-  bindUserAuthIdentity,
-  getPlatformQuotas,
-  updatePlatformQuotas,
-  resetPlatformQuotaWindow,
+  bindUserAuthIdentity
 }
 
 export default usersAPI

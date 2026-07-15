@@ -1,16 +1,28 @@
-import { i18n } from '@/i18n'
-import type { RouteLocationNormalizedLoaded } from 'vue-router'
-import type { CustomMenuItem } from '@/types'
+const DEFAULT_SITE_NAME = 'NavtoAI API'
+type TranslateTitle = (key: string) => string
+
+function normalizeSiteName(siteName?: string): string {
+  const trimmed = typeof siteName === 'string' ? siteName.trim() : ''
+  if (!trimmed || trimmed === 'Sub2API') {
+    return DEFAULT_SITE_NAME
+  }
+  return trimmed.toLowerCase() === 'navtoai api' ? DEFAULT_SITE_NAME : trimmed
+}
 
 /**
  * 统一生成页面标题，避免多处写入 document.title 产生覆盖冲突。
  * 优先使用 titleKey 通过 i18n 翻译，fallback 到静态 routeTitle。
  */
-export function resolveDocumentTitle(routeTitle: unknown, siteName?: string, titleKey?: string): string {
-  const normalizedSiteName = typeof siteName === 'string' && siteName.trim() ? siteName.trim() : 'Sub2API'
+export function resolveDocumentTitle(
+  routeTitle: unknown,
+  siteName?: string,
+  titleKey?: string,
+  translate?: TranslateTitle
+): string {
+  const normalizedSiteName = normalizeSiteName(siteName)
 
   if (typeof titleKey === 'string' && titleKey.trim()) {
-    const translated = i18n.global.t(titleKey)
+    const translated = translate?.(titleKey)
     if (translated && translated !== titleKey) {
       return `${translated} - ${normalizedSiteName}`
     }
@@ -21,18 +33,4 @@ export function resolveDocumentTitle(routeTitle: unknown, siteName?: string, tit
   }
 
   return normalizedSiteName
-}
-
-export function resolveRouteDocumentTitle(
-  route: Pick<RouteLocationNormalizedLoaded, 'name' | 'params' | 'meta'>,
-  siteName: string | undefined,
-  customMenuItems: CustomMenuItem[] = [],
-): string {
-  const id = typeof route.params.id === 'string' ? route.params.id : ''
-  const menuItem = route.name === 'CustomPage' && id
-    ? customMenuItems.find((item) => item.id === id)
-    : undefined
-  const menuTitle = menuItem?.label.trim()
-
-  return resolveDocumentTitle(menuTitle || route.meta.title, siteName, menuTitle ? undefined : route.meta.titleKey as string)
 }
