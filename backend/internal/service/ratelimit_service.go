@@ -812,6 +812,11 @@ func (s *RateLimitService) handle403(ctx context.Context, account *Account, upst
 }
 
 func (s *RateLimitService) handleOpenAI403(ctx context.Context, account *Account, upstreamMsg string, responseBody []byte) (shouldDisable bool) {
+	if account.IsTempUnschedulableProtected() {
+		slog.Warn("openai_403_protected_account_kept_schedulable", "account_id", account.ID)
+		return false
+	}
+
 	if isTransientOpenAI403(responseBody) {
 		slog.Warn(
 			"openai_403_transient_upstream_ignored",
@@ -2086,6 +2091,9 @@ func (s *RateLimitService) tryTempUnschedulable(ctx context.Context, account *Ac
 	if account == nil {
 		return false
 	}
+	if account.IsTempUnschedulableProtected() {
+		return false
+	}
 	if !account.IsTempUnschedulableEnabled() {
 		return false
 	}
@@ -2173,6 +2181,9 @@ func (s *RateLimitService) triggerTempUnschedulable(ctx context.Context, account
 	if account == nil {
 		return false
 	}
+	if account.IsTempUnschedulableProtected() {
+		return false
+	}
 	if rule.DurationMinutes <= 0 {
 		return false
 	}
@@ -2228,6 +2239,9 @@ func truncateTempUnschedMessage(body []byte, maxBytes int) string {
 // 返回是否应该停止该账号的调度
 func (s *RateLimitService) HandleStreamTimeout(ctx context.Context, account *Account, model string) bool {
 	if account == nil {
+		return false
+	}
+	if account.IsTempUnschedulableProtected() {
 		return false
 	}
 

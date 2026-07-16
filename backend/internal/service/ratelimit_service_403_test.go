@@ -114,3 +114,31 @@ func TestRateLimitService_HandleUpstreamError_OpenAI403UpstreamUnavailableRemain
 	require.Empty(t, blocker.accounts)
 	require.Len(t, counter.counts, 1)
 }
+
+func TestRateLimitService_HandleUpstreamError_OpenAI403ProtectedAccountRemainsSchedulable(t *testing.T) {
+	repo := &rateLimitAccountRepoStub{}
+	counter := &openAI403CounterCacheStub{counts: []int64{1}}
+	service := NewRateLimitService(repo, nil, &config.Config{}, nil, nil)
+	service.SetOpenAI403CounterCache(counter)
+	account := &Account{
+		ID:       304,
+		Platform: PlatformOpenAI,
+		Type:     AccountTypeAPIKey,
+		Credentials: map[string]any{
+			"never_temp_unschedulable": true,
+		},
+	}
+
+	shouldDisable := service.HandleUpstreamError(
+		context.Background(),
+		account,
+		http.StatusForbidden,
+		http.Header{},
+		[]byte(`{"error":{"code":"capability_not_supported"}}`),
+	)
+
+	require.False(t, shouldDisable)
+	require.Equal(t, 0, repo.setErrorCalls)
+	require.Equal(t, 0, repo.tempCalls)
+	require.Len(t, counter.counts, 1)
+}
