@@ -812,6 +812,15 @@ func (s *RateLimitService) handle403(ctx context.Context, account *Account, upst
 }
 
 func (s *RateLimitService) handleOpenAI403(ctx context.Context, account *Account, upstreamMsg string, responseBody []byte) (shouldDisable bool) {
+	if isTransientOpenAI403(responseBody) {
+		slog.Warn(
+			"openai_403_transient_upstream_ignored",
+			"account_id", account.ID,
+			"error_code", "upstream_unavailable",
+		)
+		return false
+	}
+
 	msg := buildForbiddenErrorMessage(
 		"Access forbidden (403):",
 		upstreamMsg,
@@ -854,6 +863,13 @@ func (s *RateLimitService) handleOpenAI403(ctx context.Context, account *Account
 		"threshold", openAI403DisableThreshold,
 	)
 	return true
+}
+
+func isTransientOpenAI403(responseBody []byte) bool {
+	return strings.EqualFold(
+		strings.TrimSpace(gjson.GetBytes(responseBody, "error.code").String()),
+		"upstream_unavailable",
+	)
 }
 
 // handleAntigravity403 处理 Antigravity 平台的 403 错误
