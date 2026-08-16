@@ -576,6 +576,18 @@ func writeUsageLogBestEffort(ctx context.Context, repo UsageLogRepository, usage
 	usageCtx, cancel := detachedBillingContext(ctx)
 	defer cancel()
 
+	// Request content needs the usage log ID. The asynchronous path returns
+	// before that ID is assigned, so persist content-bearing logs synchronously
+	// through the repository's existing batched Create path.
+	if usageLog.RequestContent != "" {
+		if _, err := repo.Create(usageCtx, usageLog); err != nil {
+			logger.LegacyPrintf(logKey, "Create usage log with request content failed: %v", err)
+			return
+		}
+		writeUsageRequestContent(usageCtx, repo, usageLog, logKey)
+		return
+	}
+
 	if writer, ok := repo.(usageLogBestEffortWriter); ok {
 		if err := writer.CreateBestEffort(usageCtx, usageLog); err != nil {
 			logger.LegacyPrintf(logKey, "Create usage log failed: %v", err)

@@ -58,12 +58,13 @@ func newGatewayRecordUsageServiceWithBillingRepoForTest(usageRepo UsageLogReposi
 type openAIRecordUsageBestEffortLogRepoStub struct {
 	UsageLogRepository
 
-	bestEffortErr   error
-	createErr       error
-	bestEffortCalls int
-	createCalls     int
-	lastLog         *UsageLog
-	lastCtxErr      error
+	bestEffortErr    error
+	createErr        error
+	bestEffortCalls  int
+	createCalls      int
+	saveContentCalls int
+	lastLog          *UsageLog
+	lastCtxErr       error
 }
 
 func (s *openAIRecordUsageBestEffortLogRepoStub) CreateBestEffort(ctx context.Context, log *UsageLog) error {
@@ -75,9 +76,29 @@ func (s *openAIRecordUsageBestEffortLogRepoStub) CreateBestEffort(ctx context.Co
 
 func (s *openAIRecordUsageBestEffortLogRepoStub) Create(ctx context.Context, log *UsageLog) (bool, error) {
 	s.createCalls++
+	log.ID = 9001
 	s.lastLog = log
 	s.lastCtxErr = ctx.Err()
 	return false, s.createErr
+}
+
+func (s *openAIRecordUsageBestEffortLogRepoStub) SaveRequestContent(_ context.Context, usageLogID int64, _ string) error {
+	if usageLogID > 0 {
+		s.saveContentCalls++
+	}
+	return nil
+}
+
+func TestWriteUsageLogBestEffort_PersistsContentAfterCreate(t *testing.T) {
+	repo := &openAIRecordUsageBestEffortLogRepoStub{}
+	log := &UsageLog{RequestContent: `{"input":[{"role":"user","content":"hello"}]}`}
+
+	writeUsageLogBestEffort(context.Background(), repo, log, "test.usage")
+
+	require.Equal(t, 1, repo.createCalls)
+	require.Equal(t, 0, repo.bestEffortCalls)
+	require.Equal(t, 1, repo.saveContentCalls)
+	require.Equal(t, int64(9001), log.ID)
 }
 
 func TestGatewayServiceRecordUsage_BillingUsesDetachedContext(t *testing.T) {
