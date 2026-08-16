@@ -3767,8 +3767,7 @@ const loadUsageSummary = async () => {
   }
   usageLoading.value = true;
   try {
-    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-    const data = await adminAPI.groups.getUsageSummary(tz);
+    const data = await adminAPI.groups.getUsageSummary();
     const map = new Map<number, { today_cost: number; total_cost: number }>();
     for (const item of data) {
       map.set(item.group_id, {
