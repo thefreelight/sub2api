@@ -118,6 +118,7 @@
           :default-sort-order="'desc'"
           @sort="handleSort"
           @userClick="handleUserClick"
+		  @viewRequestContent="handleViewRequestContent"
           @ipGeoBatchFailed="handleIpGeoBatchFailed"
         />
         <Pagination v-if="pagination.total > 0" :page="pagination.page" :total="pagination.total" :page-size="pagination.page_size" @update:page="handlePageChange" @update:pageSize="handlePageSizeChange" />
@@ -153,6 +154,18 @@
     :hide-actions="true"
     @close="showBalanceHistoryModal = false; balanceHistoryUser = null"
   />
+  <Teleport to="body">
+    <div v-if="requestContentVisible" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" @click.self="requestContentVisible = false">
+      <section class="flex max-h-[80vh] w-full max-w-3xl flex-col rounded-lg bg-white shadow-xl dark:bg-dark-800">
+        <header class="flex items-center justify-between border-b border-gray-200 px-4 py-3 dark:border-dark-700">
+          <h2 class="text-base font-semibold text-gray-900 dark:text-white">Request content</h2>
+          <button type="button" class="text-gray-500 hover:text-gray-800 dark:hover:text-white" @click="requestContentVisible = false"><Icon name="x" size="sm" /></button>
+        </header>
+        <p v-if="requestContentBytes" class="px-4 pt-3 text-sm text-gray-500 dark:text-gray-400">{{ requestContentBytes }} bytes</p>
+        <pre class="m-4 overflow-auto whitespace-pre-wrap break-words rounded bg-gray-50 p-3 text-xs text-gray-800 dark:bg-dark-900 dark:text-gray-100">{{ requestContentLoading ? 'Loading...' : requestContent }}</pre>
+      </section>
+    </div>
+  </Teleport>
 </template>
 
 <script setup lang="ts">
@@ -215,6 +228,10 @@ let statsReqSeq = 0
 let modelStatsReqSeq = 0
 const exportProgress = reactive({ show: false, progress: 0, current: 0, total: 0, estimatedTime: '' })
 const cleanupDialogVisible = ref(false)
+const requestContentVisible = ref(false)
+const requestContentLoading = ref(false)
+const requestContent = ref('')
+const requestContentBytes = ref(0)
 // Balance history modal state
 const showBalanceHistoryModal = ref(false)
 const balanceHistoryUser = ref<AdminUser | null>(null)
@@ -237,6 +254,22 @@ const handleUserClick = async (userId: number) => {
     showBalanceHistoryModal.value = true
   } catch {
     appStore.showError(t('admin.usage.failedToLoadUser'))
+  }
+}
+
+const handleViewRequestContent = async (usageId: number) => {
+  requestContentVisible.value = true
+  requestContentLoading.value = true
+  requestContent.value = ''
+  try {
+    const data = await adminUsageAPI.getRequestContent(usageId)
+    requestContent.value = data.content
+    requestContentBytes.value = data.content_bytes
+  } catch {
+    requestContentVisible.value = false
+    appStore.showError('Request content is unavailable')
+  } finally {
+    requestContentLoading.value = false
   }
 }
 
@@ -580,6 +613,7 @@ const allColumns = computed(() => [
   { key: 'created_at', label: t('usage.time'), sortable: true },
   { key: 'user_agent', label: t('usage.userAgent'), sortable: false },
   { key: 'ip_address', label: t('admin.usage.ipAddress'), sortable: false }
+	, { key: 'actions', label: 'Request', sortable: false }
 ])
 
 const hiddenColumns = reactive<Set<string>>(new Set())

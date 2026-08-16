@@ -163,6 +163,30 @@ func (r *usageLogRepository) Create(ctx context.Context, log *service.UsageLog) 
 	return r.createBatched(ctx, log)
 }
 
+func (r *usageLogRepository) SaveRequestContent(ctx context.Context, usageLogID int64, content string) error {
+	if r == nil || r.sql == nil || usageLogID <= 0 || content == "" {
+		return nil
+	}
+	contentBytes := len([]byte(content))
+	_, err := r.sql.ExecContext(ctx, `
+		INSERT INTO usage_log_request_contents (usage_log_id, content, content_bytes, truncated)
+		VALUES ($1, $2, $3, FALSE)
+		ON CONFLICT (usage_log_id) DO UPDATE SET
+			content=EXCLUDED.content, content_bytes=EXCLUDED.content_bytes, truncated=FALSE`,
+		usageLogID, content, contentBytes)
+	return err
+}
+
+func (r *usageLogRepository) GetRequestContent(ctx context.Context, usageLogID int64) (string, int, bool, error) {
+	var content string
+	var contentBytes int
+	var truncated bool
+	err := scanSingleRow(ctx, r.sql, `
+		SELECT content, content_bytes, truncated
+		FROM usage_log_request_contents WHERE usage_log_id=$1`, []any{usageLogID}, &content, &contentBytes, &truncated)
+	return content, contentBytes, truncated, err
+}
+
 func (r *usageLogRepository) CreateBestEffort(ctx context.Context, log *service.UsageLog) error {
 	if log == nil {
 		return nil

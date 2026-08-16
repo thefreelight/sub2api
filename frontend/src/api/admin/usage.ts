@@ -89,6 +89,17 @@ export interface AdminUsageQueryParams extends UsageQueryParams {
   status_code?: number | null
 }
 
+export interface UsageRequestContent {
+  content: string
+  content_bytes: number
+  truncated: boolean
+}
+
+export async function getRequestContent(usageId: number): Promise<UsageRequestContent> {
+  const { data } = await apiClient.get<UsageRequestContent>(`/admin/usage/${usageId}/request-content`)
+  return data
+}
+
 // ==================== API Functions ====================
 
 /**
@@ -203,6 +214,7 @@ export async function cancelCleanupTask(taskId: number): Promise<{ id: number; s
 export const adminUsageAPI = {
   list,
   getStats,
+  getRequestContent,
   searchUsers,
   searchApiKeys,
   listCleanupTasks,

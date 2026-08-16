@@ -37,6 +37,7 @@ func (s *GatewayService) ResolveUserGroupRateMultiplier(ctx context.Context, use
 // RecordUsageInput 记录使用量的输入参数。
 // 异步 worker 只接收计费所需快照，不能持有 ParsedRequest/RequestBodyRef 这类大请求体引用。
 type RecordUsageInput struct {
+	RequestContent     string // admin-only request content drilldown
 	Result             *ForwardResult
 	APIKey             *APIKey
 	User               *User
@@ -68,6 +69,10 @@ type apiKeyAuthCacheInvalidator interface {
 
 type usageLogBestEffortWriter interface {
 	CreateBestEffort(ctx context.Context, log *UsageLog) error
+}
+
+type usageRequestContentWriter interface {
+	SaveRequestContent(ctx context.Context, usageLogID int64, content string) error
 }
 
 // postUsageBillingParams 统一扣费所需的参数
@@ -588,11 +593,23 @@ func writeUsageLogBestEffort(ctx context.Context, repo UsageLogRepository, usage
 				logger.LegacyPrintf(logKey, "Create usage log sync fallback failed: %v", syncErr)
 			}
 		}
+		writeUsageRequestContent(usageCtx, repo, usageLog, logKey)
 		return
 	}
 
 	if _, err := repo.Create(usageCtx, usageLog); err != nil {
 		logger.LegacyPrintf(logKey, "Create usage log failed: %v", err)
+	}
+	writeUsageRequestContent(usageCtx, repo, usageLog, logKey)
+}
+
+func writeUsageRequestContent(ctx context.Context, repo UsageLogRepository, usageLog *UsageLog, logKey string) {
+	writer, ok := repo.(usageRequestContentWriter)
+	if !ok || usageLog == nil || usageLog.ID <= 0 || usageLog.RequestContent == "" {
+		return
+	}
+	if err := writer.SaveRequestContent(ctx, usageLog.ID, usageLog.RequestContent); err != nil {
+		logger.LegacyPrintf(logKey, "Save usage request content failed: %v", err)
 	}
 }
 
@@ -607,6 +624,7 @@ type recordUsageOpts struct {
 func (s *GatewayService) RecordUsage(ctx context.Context, input *RecordUsageInput) error {
 	return s.recordUsageCore(ctx, &recordUsageCoreInput{
 		Result:             input.Result,
+		RequestContent:     input.RequestContent,
 		APIKey:             input.APIKey,
 		User:               input.User,
 		Account:            input.Account,
@@ -687,6 +705,7 @@ type recordUsageCoreInput struct {
 	IPAddress          string
 	SessionID          string
 	RequestPayloadHash string
+	RequestContent     string
 	ForceCacheBilling  bool
 	APIKeyService      APIKeyQuotaUpdater
 	QuotaPlatform      string
@@ -1207,6 +1226,7 @@ func (s *GatewayService) buildRecordUsageLog(
 		)
 	}
 	usageLog := &UsageLog{
+		RequestContent:        input.RequestContent,
 		UserID:                user.ID,
 		APIKeyID:              apiKey.ID,
 		AccountID:             account.ID,

@@ -211,6 +211,17 @@
           <span v-else class="text-sm text-gray-400 dark:text-gray-500">-</span>
         </template>
 
+        <template #cell-actions="{ row }">
+          <button
+            type="button"
+            class="inline-flex h-8 w-8 items-center justify-center rounded text-gray-500 hover:bg-gray-100 hover:text-primary-600 dark:text-gray-400 dark:hover:bg-dark-700"
+            title="View request content"
+            @click="$emit('viewRequestContent', row.id)"
+          >
+            <Icon name="document" size="sm" />
+          </button>
+        </template>
+
         <template #empty><EmptyState :message="t('usage.noRecords')" /></template>
       </DataTable>
     </div>
@@ -488,6 +499,7 @@ const emit = defineEmits<{
   userClick: [userID: number, email?: string]
   sort: [key: string, order: 'asc' | 'desc']
   ipGeoBatchFailed: []
+  viewRequestContent: [usageID: number]
 }>()
 const { t } = useI18n()
 const showAccountBilling = props.showAccountBilling

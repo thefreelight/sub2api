@@ -157,6 +157,28 @@ func (s *UsageService) GetByID(ctx context.Context, id int64) (*UsageLog, error)
 	return log, nil
 }
 
+type UsageRequestContent struct {
+	Content      string `json:"content"`
+	ContentBytes int    `json:"content_bytes"`
+	Truncated    bool   `json:"truncated"`
+}
+
+type usageRequestContentReader interface {
+	GetRequestContent(ctx context.Context, usageLogID int64) (string, int, bool, error)
+}
+
+func (s *UsageService) GetRequestContent(ctx context.Context, id int64) (*UsageRequestContent, error) {
+	reader, ok := s.usageRepo.(usageRequestContentReader)
+	if !ok {
+		return nil, fmt.Errorf("usage request content is unavailable")
+	}
+	content, contentBytes, truncated, err := reader.GetRequestContent(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	return &UsageRequestContent{Content: content, ContentBytes: contentBytes, Truncated: truncated}, nil
+}
+
 // ListByUser 获取用户的使用日志列表
 func (s *UsageService) ListByUser(ctx context.Context, userID int64, params pagination.PaginationParams) ([]UsageLog, *pagination.PaginationResult, error) {
 	logs, pagination, err := s.usageRepo.ListByUser(ctx, userID, params)

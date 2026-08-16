@@ -213,6 +213,22 @@ func (h *UsageHandler) List(c *gin.Context) {
 	response.Paginated(c, out, result.Total, page, pageSize)
 }
 
+// GetRequestContent returns sensitive request content to administrators only.
+// GET /api/v1/admin/usage/:id/request-content
+func (h *UsageHandler) GetRequestContent(c *gin.Context) {
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil || id <= 0 {
+		response.BadRequest(c, "Invalid usage id")
+		return
+	}
+	content, err := h.usageService.GetRequestContent(c.Request.Context(), id)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, content)
+}
+
 // Stats handles getting usage statistics with filters
 // GET /api/v1/admin/usage/stats
 func (h *UsageHandler) Stats(c *gin.Context) {

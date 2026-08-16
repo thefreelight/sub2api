@@ -358,6 +358,7 @@ func (h *OpenAIGatewayHandler) ChatCompletions(c *gin.Context) {
 		cyberBlocked := service.GetOpsCyberPolicy(c) != nil
 		h.submitOpenAIUsageRecordTask(c.Request.Context(), result, func(ctx context.Context) {
 			if err := h.gatewayService.RecordUsage(ctx, &service.OpenAIRecordUsageInput{
+				RequestContent:     string(body),
 				Result:             result,
 				APIKey:             apiKey,
 				User:               apiKey.User,

@@ -20,6 +20,7 @@ import (
 
 // OpenAIRecordUsageInput input for recording usage
 type OpenAIRecordUsageInput struct {
+	RequestContent     string
 	Result             *OpenAIForwardResult
 	APIKey             *APIKey
 	User               *User
@@ -317,6 +318,7 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 	}
 
 	usageLog := &UsageLog{
+		RequestContent:        input.RequestContent,
 		UserID:                user.ID,
 		APIKeyID:              apiKey.ID,
 		AccountID:             account.ID,
