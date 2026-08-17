@@ -745,7 +745,7 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 		cyberBlocked := service.GetOpsCyberPolicy(c) != nil
 		h.submitOpenAIUsageRecordTask(c.Request.Context(), result, func(ctx context.Context) {
 			if err := h.gatewayService.RecordUsage(ctx, &service.OpenAIRecordUsageInput{
-				RequestContent:     string(body),
+				RequestContent:     service.ExtractUsageRequestContent(body),
 				Result:             result,
 				APIKey:             apiKey,
 				User:               apiKey.User,
@@ -1266,7 +1266,7 @@ func (h *OpenAIGatewayHandler) Messages(c *gin.Context) {
 		cyberBlocked := service.GetOpsCyberPolicy(c) != nil
 		h.submitOpenAIUsageRecordTask(c.Request.Context(), result, func(ctx context.Context) {
 			if err := h.gatewayService.RecordUsage(ctx, &service.OpenAIRecordUsageInput{
-				RequestContent:     string(body),
+				RequestContent:     service.ExtractUsageRequestContent(body),
 				Result:             result,
 				APIKey:             apiKey,
 				User:               apiKey.User,
