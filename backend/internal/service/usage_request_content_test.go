@@ -3,7 +3,7 @@ package service
 import "testing"
 
 func TestExtractUsageRequestContentResponses(t *testing.T) {
-	body := []byte(`{"model":"gpt-5","tools":[{"type":"function","name":"search"}],"input":[{"role":"developer","content":"hidden instructions"},{"role":"user","content":[{"type":"input_text","text":"show me the latest release"}]}]}`)
+	body := []byte(`{"model":"gpt-5","tools":[{"type":"function","name":"search"}],"input":[{"role":"developer","content":"hidden instructions"},{"role":"user","content":[{"type":"input_text","text":"show me the latest release"}]},{"type":"function_call_output","output":"tool result"}]}`)
 	if got := ExtractUsageRequestContent(body); got != "show me the latest release" {
 		t.Fatalf("ExtractUsageRequestContent() = %q", got)
 	}
