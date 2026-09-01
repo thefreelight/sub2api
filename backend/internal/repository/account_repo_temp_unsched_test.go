@@ -36,6 +36,17 @@ func TestAccountRepository_SetError_ProtectedAccountIsFilteredBySQL(t *testing.T
 	require.Len(t, exec.execQueries, 1)
 	normalized := normalizeSQLWhitespace(exec.execQueries[0])
 	require.Contains(t, normalized, "credentials->'never_temp_unschedulable' IS DISTINCT FROM 'true'::jsonb")
+}
+
+func TestAccountRepository_ResetQuotaUsedAndClearRateLimitCooldown_NoRowsAffectedReturnsNotFoundWithoutOutbox(t *testing.T) {
+	exec := &recordingSQLExecutor{result: rowsAffectedResult(0)}
+	repo := newAccountRepositoryWithSQL(nil, exec, nil)
+
+	err := repo.ResetQuotaUsedAndClearRateLimitCooldown(context.Background(), 42)
+
+	require.ErrorIs(t, err, service.ErrAccountNotFound)
+	require.Len(t, exec.execQueries, 1)
+	require.Contains(t, exec.execQueries[0], "UPDATE accounts")
 	require.NotContains(t, strings.Join(exec.execQueries, "\n"), "scheduler_outbox")
 }
 
