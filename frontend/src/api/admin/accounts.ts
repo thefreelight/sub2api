@@ -347,6 +347,15 @@ export async function batchCreate(accounts: CreateAccountRequest[]): Promise<{
   return data
 }
 
+export async function importAPIKeys(id: number, apiKeys: string[]): Promise<{
+  success: number
+  failed: number
+  results: Array<{ success: boolean; id?: number; name?: string; error?: string }>
+}> {
+  const { data } = await apiClient.post(`/admin/accounts/${id}/import-api-keys`, { api_keys: apiKeys })
+  return data
+}
+
 /**
  * Batch update credentials fields for multiple accounts
  * @param request - Batch update request containing account IDs, field name, and value
@@ -820,6 +829,7 @@ export const accountsAPI = {
   exchangeCode,
   refreshOpenAIToken,
   batchCreate,
+  importAPIKeys,
   batchUpdateCredentials,
   bulkUpdate,
   previewFromCrs,

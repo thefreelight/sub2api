@@ -950,6 +950,37 @@ func (h *AccountHandler) Duplicate(c *gin.Context) {
 	response.Success(c, result.Data)
 }
 
+func (h *AccountHandler) ImportAPIKeys(c *gin.Context) {
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		response.BadRequest(c, "Invalid account ID")
+		return
+	}
+	var req struct {
+		APIKeys []string `json:"api_keys" binding:"required,min=1,max=1000"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "Invalid request: "+err.Error())
+		return
+	}
+	importer, ok := h.adminService.(interface {
+		ImportAPIKeysFromAccount(context.Context, int64, []string) ([]*service.Account, []error)
+	})
+	if !ok {
+		response.ErrorFrom(c, errors.New("API key import is unavailable"))
+		return
+	}
+	created, errs := importer.ImportAPIKeysFromAccount(c.Request.Context(), id, req.APIKeys)
+	results := make([]gin.H, 0, len(created)+len(errs))
+	for _, account := range created {
+		results = append(results, gin.H{"success": true, "id": account.ID, "name": account.Name})
+	}
+	for _, itemErr := range errs {
+		results = append(results, gin.H{"success": false, "error": itemErr.Error()})
+	}
+	response.Success(c, gin.H{"success": len(created), "failed": len(errs), "results": results})
+}
+
 // Update handles updating an account
 // PUT /api/v1/admin/accounts/:id
 func (h *AccountHandler) Update(c *gin.Context) {

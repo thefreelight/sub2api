@@ -2,7 +2,9 @@ package service
 
 import (
 	"context"
+	"crypto/rand"
 	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -332,6 +334,65 @@ func (s *adminServiceImpl) DuplicateAccount(ctx context.Context, id int64, actor
 	duplicate.AccountGroups = groups
 	duplicate.GroupIDs = groupIDs
 	return duplicate, nil
+}
+
+func randomAPIKeySuffix() string {
+	buf := make([]byte, 4)
+	if _, err := rand.Read(buf); err != nil {
+		return strconv.FormatInt(time.Now().UnixNano(), 36)
+	}
+	return hex.EncodeToString(buf)
+}
+
+func (s *adminServiceImpl) ImportAPIKeysFromAccount(ctx context.Context, id int64, apiKeys []string) ([]*Account, []error) {
+	source, err := s.accountRepo.GetByID(ctx, id)
+	if err != nil {
+		return nil, []error{err}
+	}
+	if source.Type != AccountTypeAPIKey && source.Type != AccountTypeUpstream {
+		return nil, []error{infraerrors.BadRequest("ACCOUNT_API_KEY_IMPORT_UNSUPPORTED", "only API key or upstream accounts can be used as templates")}
+	}
+	credentials, err := cloneAccountJSONMap(source.Credentials)
+	if err != nil {
+		return nil, []error{err}
+	}
+	extra, err := duplicateAccountExtra(source.Extra)
+	if err != nil {
+		return nil, []error{err}
+	}
+	seen := map[string]struct{}{}
+	created := make([]*Account, 0, len(apiKeys))
+	errs := make([]error, 0)
+	for _, raw := range apiKeys {
+		key := strings.TrimSpace(raw)
+		if key == "" {
+			continue
+		}
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		creds, cloneErr := cloneAccountJSONMap(credentials)
+		if cloneErr != nil {
+			errs = append(errs, cloneErr)
+			continue
+		}
+		creds["api_key"] = key
+		input := &CreateAccountInput{
+			Name: duplicateAccountName(strings.TrimSpace(source.Name) + " " + randomAPIKeySuffix()), Notes: cloneAccountValuePointer(source.Notes),
+			Platform: source.Platform, Type: source.Type, Credentials: creds, Extra: extra, ProxyID: cloneAccountValuePointer(source.ProxyID),
+			Concurrency: source.Concurrency, Priority: source.Priority, RateMultiplier: cloneAccountValuePointer(source.RateMultiplier), LoadFactor: cloneAccountValuePointer(source.LoadFactor),
+			GroupIDs: append([]int64(nil), source.GroupIDs...), SkipDefaultGroupBind: true, SkipMixedChannelCheck: true,
+		}
+		account, createErr := s.CreateAccount(ctx, input)
+		if createErr != nil {
+			errs = append(errs, createErr)
+			continue
+		}
+		account.Schedulable = false
+		created = append(created, account)
+	}
+	return created, errs
 }
 
 func normalizeAccountConcurrency(platform, accountType string, concurrency int) int {
