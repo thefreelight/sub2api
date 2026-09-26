@@ -14,17 +14,18 @@ func ExtractUsageRequestContent(body []byte) string {
 		return ""
 	}
 	input := gjson.GetBytes(body, "input")
+	collector := moderationTextCollector{filterReminders: true}
 	if input.IsArray() {
 		items := input.Array()
 		for i := len(items) - 1; i >= 0; i-- {
-			if !isResponsesUserTextItem(items[i]) {
+			if !collector.isResponsesUserTextItem(items[i]) {
 				continue
 			}
 			var parts []string
 			var images []string
-			collectContentValue(items[i].Get("content"), &parts, &images)
+			collector.collectContentValue(items[i].Get("content"), &parts, &images)
 			if items[i].Get("type").String() == "input_text" || items[i].Get("text").Exists() {
-				collectContentValue(items[i], &parts, &images)
+				collector.collectContentValue(items[i], &parts, &images)
 			}
 			return normalizeContentModerationText(strings.Join(parts, "\n"))
 		}
