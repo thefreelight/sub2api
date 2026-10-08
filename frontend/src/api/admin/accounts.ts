@@ -473,6 +473,18 @@ export async function syncUpstreamModels(id: number): Promise<SyncUpstreamModels
   return data
 }
 
+export interface SyncAllUpstreamModelsResult {
+  total: number
+  success: number
+  failed: number
+  results: Array<{ account_id: number; name: string; success: boolean; models?: number; error?: string }>
+}
+
+export async function syncAllUpstreamModels(): Promise<SyncAllUpstreamModelsResult> {
+  const { data } = await apiClient.post<SyncAllUpstreamModelsResult>('/admin/accounts/models/sync-upstream-all', undefined, { timeout: 600000 })
+  return data
+}
+
 export interface SyncUpstreamPreviewParams {
   platform: string
   type: string
@@ -829,6 +841,7 @@ export const accountsAPI = {
   exchangeCode,
   refreshOpenAIToken,
   batchCreate,
+  syncAllUpstreamModels,
   importAPIKeys,
   batchUpdateCredentials,
   bulkUpdate,

@@ -92,6 +92,10 @@
                       </span>
                       <span class="flex-1 text-left">{{ t('admin.accounts.syncFromCrs') }}</span>
                     </button>
+                    <button class="account-tools-menu-item" :disabled="syncingAllModels" @click="handleSyncAllModels">
+                      <span class="account-tools-menu-icon bg-cyan-50 text-cyan-600 dark:bg-cyan-900/30 dark:text-cyan-300"><Icon name="refresh" size="sm" :class="syncingAllModels ? 'animate-spin' : ''" /></span>
+                      <span class="flex-1 text-left">{{ syncingAllModels ? '同步中…' : '同步所有账号上游模型' }}</span>
+                    </button>
                     <button class="account-tools-menu-item" @click="openImportData">
                       <span class="account-tools-menu-icon bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-300">
                         <Icon name="upload" size="sm" />
@@ -549,6 +553,7 @@ const exportingData = ref(false)
 
 // Account tools dropdown
 const showAccountToolsDropdown = ref(false)
+const syncingAllModels = ref(false)
 const accountToolsDropdownRef = ref<HTMLElement | null>(null)
 const hiddenColumns = reactive<Set<string>>(new Set())
 const DEFAULT_HIDDEN_COLUMNS = ['today_stats', 'proxy', 'notes', 'priority', 'rate_multiplier']
@@ -1052,6 +1057,17 @@ const handleManualRefresh = async () => {
   await load()
   // Force usage cells to refetch /usage on explicit user refresh.
   usageManualRefreshToken.value += 1
+}
+
+const handleSyncAllModels = async () => {
+  syncingAllModels.value = true
+  showAccountToolsDropdown.value = false
+  try {
+    const result = await adminAPI.accounts.syncAllUpstreamModels()
+    if (result.failed > 0) appStore.showWarning(`同步完成：成功 ${result.success}，失败 ${result.failed}`)
+    else appStore.showSuccess(`已同步 ${result.success} 个账号的上游模型`)
+  } catch (error: any) { appStore.showError(error?.message || '同步上游模型失败') }
+  finally { syncingAllModels.value = false }
 }
 
 const closeAccountToolsDropdown = () => {

@@ -3065,6 +3065,57 @@ func (h *AccountHandler) SyncUpstreamModels(c *gin.Context) {
 	response.Success(c, catalog)
 }
 
+// SyncUpstreamModelsAll fetches the live model catalog for every saved account.
+// One upstream failure is isolated to that account and does not abort the batch.
+func (h *AccountHandler) SyncUpstreamModelsAll(c *gin.Context) {
+	if h.accountTestService == nil {
+		response.InternalError(c, "Account test service is not configured")
+		return
+	}
+	accounts, _, err := h.adminService.ListAccounts(c.Request.Context(), 1, 10000, "", "", "", "", 0, "", "id", "asc")
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	type syncResult struct {
+		AccountID int64  `json:"account_id"`
+		Name      string `json:"name"`
+		Success   bool   `json:"success"`
+		Models    int    `json:"models,omitempty"`
+		Error     string `json:"error,omitempty"`
+	}
+	results := make([]syncResult, len(accounts))
+	sem := make(chan struct{}, 5)
+	var wg sync.WaitGroup
+	for i := range accounts {
+		index := i
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
+			account := &accounts[index]
+			item := syncResult{AccountID: account.ID, Name: account.Name}
+			models, fetchErr := h.accountTestService.FetchUpstreamSupportedModels(c.Request.Context(), account)
+			if fetchErr != nil {
+				item.Error = fetchErr.Error()
+			} else {
+				item.Success = true
+				item.Models = len(models)
+			}
+			results[index] = item
+		}()
+	}
+	wg.Wait()
+	success := 0
+	for _, item := range results {
+		if item.Success {
+			success++
+		}
+	}
+	response.Success(c, gin.H{"total": len(results), "success": success, "failed": len(results) - success, "results": results})
+}
+
 // SyncUpstreamModelsPreview handles syncing live supported models using provided credentials (no account ID needed).
 // POST /api/v1/admin/accounts/models/sync-upstream-preview
 func (h *AccountHandler) SyncUpstreamModelsPreview(c *gin.Context) {
